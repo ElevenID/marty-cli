@@ -1,0 +1,25 @@
+{
+  "name": "@elevenid/marty-api-core",
+  "version": "0.1.0",
+  "description": "Shared HTTP client factory for the Marty Identity Platform — used by the CLI, browser UI, and integration tests",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "keywords": [
+    "marty",
+    "elevenid",
+    "identity",
+    "api",
+    "http-client"
+  ],
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
