@@ -19,7 +19,7 @@ export function registerCredentialsCommands(program) {
       const params = new URLSearchParams({ limit: opts.limit });
       if (config.organizationId) params.set('organization_id', config.organizationId);
 
-      const data = await get(`/v1/credentials?${params}`);
+      const data = await get(`/v1/issued-credentials?${params}`);
       const list = Array.isArray(data) ? data : data?.credentials || [];
 
       const fmt = getFormatter(opts.output);
@@ -43,7 +43,7 @@ export function registerCredentialsCommands(program) {
     .description('Show details of a credential')
     .option('-o, --output <format>', 'Output format (table|json)', 'json')
     .action(withErrorHandler(async (credentialId, opts) => {
-      const data = await get(`/v1/credentials/${encodeURIComponent(credentialId)}`);
+      const data = await get(`/v1/issued-credentials/${encodeURIComponent(credentialId)}`);
       const fmt = getFormatter(opts.output);
       fmt.print(data);
     }));
@@ -55,11 +55,50 @@ export function registerCredentialsCommands(program) {
     .option('--immediate', 'Revoke immediately (vs. end of period)')
     .option('--dry-run', 'Show what would be done without executing')
     .action(withErrorHandler(async (credentialId, opts) => {
-      const body = { credential_id: credentialId };
+      const body = {};
       if (opts.reason) body.reason = opts.reason;
       if (opts.immediate) body.immediate = true;
-      if (dryRun(opts, 'POST /v1/credentials/revoke', body)) return;
-      const result = await post('/v1/credentials/revoke', body);
+      if (dryRun(opts, `POST /v1/issued-credentials/${credentialId}/revoke`, body)) return;
+      const result = await post(`/v1/issued-credentials/${encodeURIComponent(credentialId)}/revoke`, body);
       console.log(`Credential ${credentialId} revoked.`);
+    }));
+
+  creds
+    .command('issue')
+    .description('Issue a new credential')
+    .requiredOption('--credential-template-id <id>', 'Credential template ID')
+    .requiredOption('--flow-execution-id <id>', 'Flow execution ID')
+    .requiredOption('--subject-claims <json>', 'Subject claims as JSON object')
+    .option('--holder-identifier <id>', 'Holder identifier (DID or key)')
+    .option('-o, --output <format>', 'Output format (table|json)', 'json')
+    .option('--dry-run', 'Show what would be done without executing')
+    .action(withErrorHandler(async (opts) => {
+      const body = {
+        credential_template_id: opts.credentialTemplateId,
+        flow_execution_id: opts.flowExecutionId,
+      };
+      try { body.subject_claims = JSON.parse(opts.subjectClaims); }
+      catch { fail('--subject-claims must be valid JSON'); }
+      if (opts.holderIdentifier) body.holder_identifier = opts.holderIdentifier;
+
+      if (dryRun(opts, 'POST /v1/credentials/issue', body)) return;
+      const result = await post('/v1/credentials/issue', body);
+      const fmt = getFormatter(opts.output);
+      fmt.print(result);
+    }));
+
+  creds
+    .command('verify')
+    .description('Verify a credential')
+    .requiredOption('--credential <jwt>', 'Credential JWT string')
+    .option('-o, --output <format>', 'Output format (table|json)', 'json')
+    .option('--dry-run', 'Show what would be done without executing')
+    .action(withErrorHandler(async (opts) => {
+      const body = { credential: opts.credential };
+
+      if (dryRun(opts, 'POST /v1/credentials/verify', body)) return;
+      const result = await post('/v1/credentials/verify', body);
+      const fmt = getFormatter(opts.output);
+      fmt.print(result);
     }));
 }

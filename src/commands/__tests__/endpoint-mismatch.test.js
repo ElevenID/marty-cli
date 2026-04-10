@@ -1,9 +1,8 @@
 /**
- * Tests exposing CLI → Gateway endpoint mismatches.
+ * Regression tests guarding CLI → Gateway endpoint alignment.
  *
  * These tests verify that the API paths the CLI commands assemble
- * match the routes actually registered on the gateway.  Every assertion
- * that fails here represents a 404 in production.
+ * match the routes actually registered on the gateway.
  *
  * Gateway routes (source of truth):
  *   /v1/credential-templates   (not /v1/credentials)
@@ -58,7 +57,7 @@ const GATEWAY_ROUTES = {
   inspectFlowDefinition: '/v1/flows/definitions/',
 };
 
-describe('CLI → Gateway endpoint mismatches', () => {
+describe('CLI → Gateway endpoint alignment', () => {
   beforeEach(() => {
     apiCalls.get = [];
     apiCalls.post = [];
@@ -74,7 +73,7 @@ describe('CLI → Gateway endpoint mismatches', () => {
   // ── credentials.js ────────────────────────────────────────────────
 
   describe('credentials command', () => {
-    it('BUG: credentials list calls /v1/credentials instead of /v1/issued-credentials', async () => {
+    it('uses /v1/issued-credentials for credential listing', async () => {
       const { Command } = await import('commander');
       const { registerCredentialsCommands } = await import('../../commands/credentials.js');
 
@@ -85,13 +84,10 @@ describe('CLI → Gateway endpoint mismatches', () => {
       await program.parseAsync(['node', 'marty', 'credentials', 'list', '-o', 'json']);
 
       const url = apiCalls.get[0];
-      // This SHOULD use /v1/issued-credentials — asserting actual behaviour
-      expect(url).toContain('/v1/credentials');
-      // Expose the bug: the gateway has no /v1/credentials route
-      expect(url).not.toContain('/v1/issued-credentials');
+      expect(url).toContain('/v1/issued-credentials');
     });
 
-    it('BUG: credentials inspect calls /v1/credentials/{id} instead of /v1/issued-credentials/{id}', async () => {
+    it('uses /v1/issued-credentials/{id} for credential inspection', async () => {
       const { Command } = await import('commander');
       const { registerCredentialsCommands } = await import('../../commands/credentials.js');
 
@@ -102,12 +98,10 @@ describe('CLI → Gateway endpoint mismatches', () => {
       await program.parseAsync(['node', 'marty', 'credentials', 'inspect', 'cred-42', '-o', 'json']);
 
       const url = apiCalls.get[0];
-      expect(url).toBe('/v1/credentials/cred-42');
-      // Gateway route is /v1/issued-credentials/cred-42
-      expect(url).not.toContain('/v1/issued-credentials/');
+      expect(url).toBe('/v1/issued-credentials/cred-42');
     });
 
-    it('BUG: credentials revoke posts to /v1/credentials/revoke with body param instead of /v1/issued-credentials/{id}/revoke', async () => {
+    it('uses /v1/issued-credentials/{id}/revoke for credential revocation', async () => {
       const { Command } = await import('commander');
       const { registerCredentialsCommands } = await import('../../commands/credentials.js');
 
@@ -119,19 +113,15 @@ describe('CLI → Gateway endpoint mismatches', () => {
 
       const call = apiCalls.post[0];
 
-      // BUG 1: Wrong URL — should be /v1/issued-credentials/cred-99/revoke
-      expect(call.url).toBe('/v1/credentials/revoke');
-      expect(call.url).not.toContain('/v1/issued-credentials/');
-
-      // BUG 2: credential_id in body — gateway expects it as a path parameter
-      expect(call.body).toHaveProperty('credential_id', 'cred-99');
+      expect(call.url).toBe('/v1/issued-credentials/cred-99/revoke');
+      expect(call.body).toEqual({});
     });
   });
 
   // ── verify.js ─────────────────────────────────────────────────────
 
   describe('verify command', () => {
-    it('BUG: verify start posts to /v1/verify instead of /v1/flows/verify', async () => {
+    it('uses /v1/flows/verify to start verification', async () => {
       const { Command } = await import('commander');
       const { registerVerifyCommands } = await import('../../commands/verify.js');
 
@@ -144,12 +134,10 @@ describe('CLI → Gateway endpoint mismatches', () => {
       ]);
 
       const call = apiCalls.post[0];
-      expect(call.url).toBe('/v1/verify');
-      // Gateway route is /v1/flows/verify
-      expect(call.url).not.toBe(GATEWAY_ROUTES.startVerify);
+      expect(call.url).toBe(GATEWAY_ROUTES.startVerify);
     });
 
-    it('BUG: verify status calls /v1/verify/{id} instead of /v1/flows/instances/{id}', async () => {
+    it('uses /v1/flows/instances/{id} for verification status', async () => {
       const { Command } = await import('commander');
       const { registerVerifyCommands } = await import('../../commands/verify.js');
 
@@ -162,12 +150,10 @@ describe('CLI → Gateway endpoint mismatches', () => {
       ]);
 
       const url = apiCalls.get[0];
-      expect(url).toBe('/v1/verify/session-42');
-      // Gateway route is /v1/flows/instances/session-42
-      expect(url).not.toContain('/v1/flows/instances/');
+      expect(url).toBe('/v1/flows/instances/session-42');
     });
 
-    it('BUG: verify submit posts to /v1/verify/{id}/submit instead of /v1/flows/instances/{id}/submit', async () => {
+    it('uses /v1/flows/instances/{id}/submit for verification submission', async () => {
       const { Command } = await import('commander');
       const { registerVerifyCommands } = await import('../../commands/verify.js');
 
@@ -182,12 +168,10 @@ describe('CLI → Gateway endpoint mismatches', () => {
       ]);
 
       const call = apiCalls.post[0];
-      expect(call.url).toBe('/v1/verify/session-42/submit');
-      // Gateway route is /v1/flows/instances/session-42/submit
-      expect(call.url).not.toContain('/v1/flows/instances/');
+      expect(call.url).toBe('/v1/flows/instances/session-42/submit');
     });
 
-    it('BUG: verify evaluate posts to /v1/verify/evaluate instead of /v1/presentation-policies/evaluate', async () => {
+    it('uses the policy evaluation endpoint for stateless verification', async () => {
       const { Command } = await import('commander');
       const { registerVerifyCommands } = await import('../../commands/verify.js');
 
@@ -202,16 +186,15 @@ describe('CLI → Gateway endpoint mismatches', () => {
       ]);
 
       const call = apiCalls.post[0];
-      expect(call.url).toBe('/v1/verify/evaluate');
-      // Gateway route is /v1/presentation-policies/evaluate
-      expect(call.url).not.toBe(GATEWAY_ROUTES.evaluatePresentation);
+      expect(call.url).toBe(GATEWAY_ROUTES.evaluatePresentation);
+      expect(call.body).toEqual({ vp_token: '{"vc":"test"}' });
     });
   });
 
   // ── flows.js ──────────────────────────────────────────────────────
 
   describe('flows command', () => {
-    it('BUG: flows list calls /v1/flows instead of /v1/flows/definitions', async () => {
+    it('uses /v1/flows/definitions to list flows', async () => {
       const { Command } = await import('commander');
       const { registerFlowsCommands } = await import('../../commands/flows.js');
 
@@ -222,12 +205,10 @@ describe('CLI → Gateway endpoint mismatches', () => {
       await program.parseAsync(['node', 'marty', 'flows', 'list', '-o', 'json']);
 
       const url = apiCalls.get[0];
-      // The URL starts with /v1/flows? which matches /v1/flows but not /v1/flows/definitions
-      expect(url).toMatch(/^\/v1\/flows\?/);
-      expect(url).not.toContain('/v1/flows/definitions');
+      expect(url).toMatch(/^\/v1\/flows\/definitions\?/);
     });
 
-    it('BUG: flows inspect calls /v1/flows/{id} instead of /v1/flows/definitions/{id}', async () => {
+    it('uses /v1/flows/definitions/{id} to inspect a flow definition', async () => {
       const { Command } = await import('commander');
       const { registerFlowsCommands } = await import('../../commands/flows.js');
 
@@ -238,16 +219,14 @@ describe('CLI → Gateway endpoint mismatches', () => {
       await program.parseAsync(['node', 'marty', 'flows', 'inspect', 'flow-42', '-o', 'json']);
 
       const url = apiCalls.get[0];
-      expect(url).toBe('/v1/flows/flow-42');
-      // Gateway route is /v1/flows/definitions/flow-42
-      expect(url).not.toContain('/v1/flows/definitions/');
+      expect(url).toBe('/v1/flows/definitions/flow-42');
     });
   });
 
   // ── teste2e.js verification scenario ──────────────────────────────
 
   describe('teste2e verification scenario', () => {
-    it('BUG: scenarioVerification uses /v1/verify path (same as verify command)', async () => {
+    it('scenarioVerification uses the flow verification endpoints', async () => {
       // We can't easily test the e2e scenario runner because teste2e.js
       // calls process.exit() directly. Instead, we verify the hardcoded
       // URLs by reading the source code patterns.
@@ -263,13 +242,8 @@ describe('CLI → Gateway endpoint mismatches', () => {
         'utf-8',
       );
 
-      // Assert the wrong URLs are present in source
-      expect(src).toContain("'/v1/verify'");
-      expect(src).toContain('/v1/verify/');
-
-      // Assert the correct URLs are NOT present
-      expect(src).not.toContain("'/v1/flows/verify'");
-      expect(src).not.toContain('/v1/flows/instances/');
+      expect(src).toContain("'/v1/flows/verify'");
+      expect(src).toContain('/v1/flows/instances/');
     });
   });
 });

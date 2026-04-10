@@ -99,7 +99,7 @@ describe('verify command', () => {
       'node', 'marty', 'verify', 'start', '--policy', 'pol-1',
     ]);
 
-    expect(post).toHaveBeenCalledWith('/v1/verify', {
+    expect(post).toHaveBeenCalledWith('/v1/flows/verify', {
       presentation_policy_id: 'pol-1',
       organization_id: 'org-1',
     });
@@ -122,7 +122,7 @@ describe('verify command', () => {
       'node', 'marty', 'verify', 'start', '--policy', 'pol-1', '--trust-profile', 'tp-1',
     ]);
 
-    expect(post).toHaveBeenCalledWith('/v1/verify', {
+    expect(post).toHaveBeenCalledWith('/v1/flows/verify', {
       presentation_policy_id: 'pol-1',
       trust_profile_id: 'tp-1',
       organization_id: 'org-1',
@@ -142,7 +142,7 @@ describe('verify command', () => {
 
     await program.parseAsync(['node', 'marty', 'verify', 'status', 'session-1']);
 
-    expect(get).toHaveBeenCalledWith('/v1/verify/session-1');
+    expect(get).toHaveBeenCalledWith('/v1/flows/instances/session-1');
   });
 
   it('verify submit --dry-run does not call API', async () => {
@@ -178,7 +178,7 @@ describe('verify command', () => {
       '--presentation', '{"vp_token":"abc"}',
     ]);
 
-    expect(post).toHaveBeenCalledWith('/v1/verify/session-1/submit', { vp_token: 'abc' });
+    expect(post).toHaveBeenCalledWith('/v1/flows/instances/session-1/submit', { vp_token: 'abc' });
   });
 
   it('verify evaluate --dry-run does not call API', async () => {
@@ -198,7 +198,7 @@ describe('verify command', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('verify evaluate posts credential with optional policy', async () => {
+  it('verify evaluate posts vp_token to the policy evaluation endpoint', async () => {
     const { post } = await import('../../lib/apiAdapter.js');
     const { Command } = await import('commander');
     const { registerVerifyCommands } = await import('../../commands/verify.js');
@@ -214,9 +214,29 @@ describe('verify command', () => {
       '--credential', '{"type":"VC"}', '--policy', 'pol-1',
     ]);
 
-    expect(post).toHaveBeenCalledWith('/v1/verify/evaluate', {
-      credential: { type: 'VC' },
-      presentation_policy_id: 'pol-1',
+    expect(post).toHaveBeenCalledWith('/v1/presentation-policies/pol-1/evaluate', {
+      vp_token: '{"type":"VC"}',
+    });
+  });
+
+  it('verify evaluate accepts a raw token string', async () => {
+    const { post } = await import('../../lib/apiAdapter.js');
+    const { Command } = await import('commander');
+    const { registerVerifyCommands } = await import('../../commands/verify.js');
+
+    post.mockResolvedValue({ valid: true });
+
+    const program = new Command();
+    program.exitOverride();
+    registerVerifyCommands(program);
+
+    await program.parseAsync([
+      'node', 'marty', 'verify', 'evaluate',
+      '--credential', 'eyJhbGciOiJIUzI1NiJ9.token',
+    ]);
+
+    expect(post).toHaveBeenCalledWith('/v1/presentation-policies/evaluate', {
+      vp_token: 'eyJhbGciOiJIUzI1NiJ9.token',
     });
   });
 
@@ -239,7 +259,7 @@ describe('verify command', () => {
     await program.parseAsync(['node', 'marty', 'verify', 'sessions', '-o', 'json']);
 
     const url = get.mock.calls[0][0];
-    expect(url).toContain('/v1/verify/sessions');
+    expect(url).toContain('/v1/flows/instances');
     expect(url).toContain('organization_id=org-1');
   });
 
@@ -256,6 +276,6 @@ describe('verify command', () => {
 
     await program.parseAsync(['node', 'marty', 'verify', 'inspect', 'sess-1']);
 
-    expect(get).toHaveBeenCalledWith('/v1/verify/sess-1/inspection');
+    expect(get).toHaveBeenCalledWith('/v1/flows/instances/sess-1/result');
   });
 });

@@ -119,13 +119,13 @@ async function scenarioVerification(runner, policyId) {
   const session = await runner.runStep('Start verification session', async () => {
     const body = { presentation_policy_id: policyId };
     if (config.organizationId) body.organization_id = config.organizationId;
-    return await post('/v1/verify', body);
+    return await post('/v1/flows/verify', body);
   });
 
   const sessionId = session?.id || session?.session_id;
 
   await runner.runStep('Check session status', async () => {
-    return await get(`/v1/verify/${encodeURIComponent(sessionId)}`);
+    return await get(`/v1/flows/instances/${encodeURIComponent(sessionId)}`);
   });
 
   return { sessionId, session };

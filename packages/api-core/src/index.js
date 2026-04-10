@@ -199,10 +199,15 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
   }
 
   async function apiRequest(endpoint, options = {}) {
-    const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+    let url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+    if (options.params) {
+      const query = new URLSearchParams(options.params).toString();
+      if (query) url += `${url.includes('?') ? '&' : '?'}${query}`;
+    }
+    const { params: _params, ...fetchOptions } = options;
     const response = await fetchWithRetry(url, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      ...fetchOptions,
+      headers: { 'Content-Type': 'application/json', ...fetchOptions.headers },
     });
     const contentType = response.headers.get('Content-Type');
     if (!contentType || !contentType.includes('application/json')) return null;

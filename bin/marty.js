@@ -20,6 +20,10 @@ import { registerConfigCommands } from '../src/commands/config.js';
 import { registerTestCommands } from '../src/commands/teste2e.js';
 import { registerInitCommand } from '../src/commands/init.js';
 import { registerCompletionCommand } from '../src/commands/completion.js';
+import { registerCredentialTemplatesCommands } from '../src/commands/credentialTemplates.js';
+import { registerComplianceCommands } from '../src/commands/compliance.js';
+import { registerTrustCommands } from '../src/commands/trust.js';
+import { registerLicenseCommands } from '../src/commands/license.js';
 
 const program = new Command();
 
@@ -46,6 +50,10 @@ registerApplicationsCommands(program);
 registerVerifyCommands(program);
 registerFlowsCommands(program);
 registerTemplatesCommands(program);
+registerCredentialTemplatesCommands(program);
+registerComplianceCommands(program);
+registerTrustCommands(program);
+registerLicenseCommands(program);
 registerConfigCommands(program);
 registerTestCommands(program);
 registerInitCommand(program);

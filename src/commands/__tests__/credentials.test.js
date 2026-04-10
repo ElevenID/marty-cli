@@ -113,7 +113,7 @@ describe('credentials command', () => {
 
     await program.parseAsync(['node', 'marty', 'credentials', 'inspect', 'cred-42']);
 
-    expect(get).toHaveBeenCalledWith('/v1/credentials/cred-42');
+    expect(get).toHaveBeenCalledWith('/v1/issued-credentials/cred-42');
     const output = logSpy.mock.calls.map(c => c[0]).join('');
     const parsed = JSON.parse(output);
     expect(parsed.id).toBe('cred-42');
@@ -151,8 +151,7 @@ describe('credentials command', () => {
       '--reason', 'compromised', '--immediate',
     ]);
 
-    expect(post).toHaveBeenCalledWith('/v1/credentials/revoke', {
-      credential_id: 'cred-99',
+    expect(post).toHaveBeenCalledWith('/v1/issued-credentials/cred-99/revoke', {
       reason: 'compromised',
       immediate: true,
     });

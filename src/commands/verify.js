@@ -43,8 +43,8 @@ export function registerVerifyCommands(program) {
       if (opts.trustProfile) body.trust_profile_id = opts.trustProfile;
       if (config.organizationId) body.organization_id = config.organizationId;
 
-      if (dryRun(opts, 'POST /v1/verify', body)) return;
-      const session = await post('/v1/verify', body);
+      if (dryRun(opts, 'POST /v1/flows/verify', body)) return;
+      const session = await post('/v1/flows/verify', body);
       const fmt = getFormatter(opts.output);
       if (opts.output.startsWith('json')) { fmt.print(session); return; }
 
@@ -60,7 +60,7 @@ export function registerVerifyCommands(program) {
     .description('Check verification session status')
     .option('-o, --output <format>', 'Output format (table|json)', 'json')
     .action(withErrorHandler(async (sessionId, opts) => {
-      const data = await get(`/v1/verify/${encodeURIComponent(sessionId)}`);
+      const data = await get(`/v1/flows/instances/${encodeURIComponent(sessionId)}`);
       const fmt = getFormatter(opts.output);
       fmt.print(data);
     }));
@@ -80,8 +80,8 @@ export function registerVerifyCommands(program) {
       } catch {
         fail('--presentation must be valid JSON');
       }
-      if (dryRun(opts, `POST /v1/verify/${sessionId}/submit`, presentation)) return;
-      const result = await post(`/v1/verify/${encodeURIComponent(sessionId)}/submit`, presentation);
+      if (dryRun(opts, `POST /v1/flows/instances/${sessionId}/submit`, presentation)) return;
+      const result = await post(`/v1/flows/instances/${encodeURIComponent(sessionId)}/submit`, presentation);
       const fmt = getFormatter(opts.output);
       fmt.print(result);
     }));
@@ -101,14 +101,19 @@ export function registerVerifyCommands(program) {
       try {
         credential = JSON.parse(opts.credential);
       } catch {
-        fail('--credential must be valid JSON');
+        credential = opts.credential;
       }
-      const body = { credential };
-      if (opts.policy) body.presentation_policy_id = opts.policy;
+      const body = {
+        vp_token: typeof credential === 'string' ? credential : JSON.stringify(credential),
+      };
       if (opts.trustProfile) body.trust_profile_id = opts.trustProfile;
 
-      if (dryRun(opts, 'POST /v1/verify/evaluate', body)) return;
-      const result = await post('/v1/verify/evaluate', body);
+      const path = opts.policy
+        ? `/v1/presentation-policies/${encodeURIComponent(opts.policy)}/evaluate`
+        : '/v1/presentation-policies/evaluate';
+
+      if (dryRun(opts, `POST ${path}`, body)) return;
+      const result = await post(path, body);
       const fmt = getFormatter(opts.output);
       fmt.print(result);
     }));
@@ -128,7 +133,7 @@ export function registerVerifyCommands(program) {
         organization_id: config.organizationId,
         limit: opts.limit,
       });
-      const data = await get(`/v1/verify/sessions?${qs}`);
+      const data = await get(`/v1/flows/instances?${qs}`);
       const list = Array.isArray(data) ? data : data?.sessions || [];
 
       const fmt = getFormatter(opts.output);
@@ -150,7 +155,7 @@ export function registerVerifyCommands(program) {
     .description('Get detailed inspection result for a session')
     .option('-o, --output <format>', 'Output format (table|json)', 'json')
     .action(withErrorHandler(async (sessionId, opts) => {
-      const data = await get(`/v1/verify/${encodeURIComponent(sessionId)}/inspection`);
+      const data = await get(`/v1/flows/instances/${encodeURIComponent(sessionId)}/result`);
       const fmt = getFormatter(opts.output);
       fmt.print(data);
     }));
