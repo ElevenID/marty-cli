@@ -79,6 +79,7 @@ node bin/marty.js orgs switch <org-id>
 | `marty applications apply` | Apply for a credential (interactive template picker) |
 | `marty verify start` | Start a verification session (interactive policy picker) |
 | `marty verify status <id>` | Check session status |
+| `marty license install-selfhost` | Validate an issuer-signed self-host license and write it into `SELFHOST_SECRET_DIR` |
 | `marty templates list` | List credential templates |
 | `marty flows list` | List configured flows |
 | `marty test e2e` | Run end-to-end integration tests |
@@ -143,6 +144,19 @@ marty test e2e --scenario health
 
 # Dry run (no API calls)
 marty test e2e --dry-run
+```
+
+## Self-Host License Install
+
+`marty license install-selfhost` does not mint a production license. It validates an issuer-signed Ed25519 JWT against the same issuer, plan-tier, and entitled-product policy that the self-host runtime enforces, then writes the token and public key into `SELFHOST_SECRET_DIR/license_key` and `SELFHOST_SECRET_DIR/license_public_key`.
+
+To avoid echoing the token into shell history or terminal output, pipe the JWT on stdin and pass the public key as a file:
+
+```bash
+cat /path/to/customer-license.jwt | marty license install-selfhost \
+   --env-file /path/to/.env.selfhost.production.local \
+   --token-stdin \
+   --public-key-file /path/to/license-public-key.pem
 ```
 
 ## Environment Variables
