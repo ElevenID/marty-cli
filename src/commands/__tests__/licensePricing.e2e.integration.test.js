@@ -123,10 +123,9 @@ describe('marty CLI pricing scheme e2e (headless license gates)', () => {
       expect(result.stdout).toContain(`Plan:         ${tier}`);
 
       const installedToken = await readFile(join(secretDir, 'license_key'), 'utf8');
-      const installedPublicKey = await readFile(join(secretDir, 'license_public_key'), 'utf8');
 
       expect(installedToken.trim()).toBe(token);
-      expect(installedPublicKey.trim()).toBe(publicKeyPem);
+      await expect(readFile(join(secretDir, 'license_public_key'), 'utf8')).rejects.toThrow();
     }
   }, 30000);
 

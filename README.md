@@ -148,15 +148,16 @@ marty test e2e --dry-run
 
 ## Self-Host License Install
 
-`marty license install-selfhost` does not mint a production license. It validates an issuer-signed Ed25519 JWT against the same issuer, plan-tier, and entitled-product policy that the self-host runtime enforces, then writes the token and public key into `SELFHOST_SECRET_DIR/license_key` and `SELFHOST_SECRET_DIR/license_public_key`.
+`marty license install-selfhost` does not mint a production license. It validates an issuer-signed Ed25519 JWT against the same issuer, plan-tier, and entitled-product policy that the self-host runtime enforces, then writes the token into `SELFHOST_SECRET_DIR/license_key`.
 
-To avoid echoing the token into shell history or terminal output, pipe the JWT on stdin and pass the public key as a file:
+The Marty issuer public verification key is embedded in the CLI and self-host runtime image. Customer deployments should not provide or mount a replacement public key.
+
+To avoid echoing the token into shell history or terminal output, pipe the JWT on stdin:
 
 ```bash
 cat /path/to/customer-license.jwt | marty license install-selfhost \
    --env-file /path/to/.env.selfhost.production.local \
-   --token-stdin \
-   --public-key-file /path/to/license-public-key.pem
+   --token-stdin
 ```
 
 ## Environment Variables

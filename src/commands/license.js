@@ -11,6 +11,7 @@
 import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPublicKey, verify } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { get } from '../lib/apiAdapter.js';
 import { getFormatter, withErrorHandler, fail } from '../lib/output.js';
@@ -21,6 +22,7 @@ const DEFAULT_LICENSE_ISSUER = 'marty-license-issuer';
 const KNOWN_PLAN_TIERS = new Set(['sandbox', 'program', 'institution', 'system']);
 const PLACEHOLDER_PREFIXES = ['change-me', 'change_me', 'changeme', 'replace-me', 'replace_me'];
 const VERIFIER_PRODUCT = 'verifier';
+const EMBEDDED_SELFHOST_PUBLIC_KEY_PATH = fileURLToPath(new URL('./license_public_keys/selfhost-production.pem', import.meta.url));
 
 /**
  * Decode a JWT payload without verification (we don't have the public key client-side).
@@ -220,6 +222,10 @@ function readTextFile(pathValue, label) {
   }
 }
 
+function readEmbeddedSelfHostPublicKey() {
+  return readTextFile(EMBEDDED_SELFHOST_PUBLIC_KEY_PATH, 'Embedded Marty license public key');
+}
+
 async function readTextFromStdin(label) {
   const chunks = [];
   for await (const chunk of process.stdin) {
@@ -310,6 +316,13 @@ function ensureSingleSource(filePath, useStdin, label) {
   const sourceCount = (filePath ? 1 : 0) + (useStdin ? 1 : 0);
   if (sourceCount !== 1) {
     throw new Error(`${label} requires exactly one source: either the file option or the stdin option.`);
+  }
+}
+
+function ensureOptionalSingleSource(filePath, useStdin, label) {
+  const sourceCount = (filePath ? 1 : 0) + (useStdin ? 1 : 0);
+  if (sourceCount > 1) {
+    throw new Error(`${label} accepts at most one source: either the file option or the stdin option.`);
   }
 }
 
@@ -408,11 +421,11 @@ export function registerLicenseCommands(program) {
     .option('--secret-dir <path>', 'Override SELFHOST_SECRET_DIR from the env file')
     .option('--token-file <path>', 'Read the license JWT from a file')
     .option('--token-stdin', 'Read the license JWT from stdin without echoing it')
-    .option('--public-key-file <path>', 'Read the issuer Ed25519 PEM public key from a file')
-    .option('--public-key-stdin', 'Read the issuer Ed25519 PEM public key from stdin')
+    .option('--public-key-file <path>', 'Dev/test only: validate with a non-embedded issuer Ed25519 PEM public key file')
+    .option('--public-key-stdin', 'Dev/test only: validate with a non-embedded issuer Ed25519 PEM public key from stdin')
     .action(withErrorHandler(async (opts) => {
       ensureSingleSource(opts.tokenFile, opts.tokenStdin, 'License token');
-      ensureSingleSource(opts.publicKeyFile, opts.publicKeyStdin, 'License public key');
+      ensureOptionalSingleSource(opts.publicKeyFile, opts.publicKeyStdin, 'License public key');
       if (opts.tokenStdin && opts.publicKeyStdin) {
         throw new Error('License token and public key cannot both come from stdin in the same invocation.');
       }
@@ -428,13 +441,14 @@ export function registerLicenseCommands(program) {
         : readTextFile(opts.tokenFile, 'License token file');
       const publicKeyPem = opts.publicKeyStdin
         ? await readTextFromStdin('License public key')
-        : readTextFile(opts.publicKeyFile, 'License public key file');
+        : opts.publicKeyFile
+          ? readTextFile(opts.publicKeyFile, 'License public key file')
+          : readEmbeddedSelfHostPublicKey();
 
       const claims = validateSelfHostLicense(licenseToken, publicKeyPem, envValues);
 
       mkdirSync(secretDir, { recursive: true, mode: 0o700 });
       writeFileSync(join(secretDir, 'license_key'), `${licenseToken}\n`, { mode: 0o600 });
-      writeFileSync(join(secretDir, 'license_public_key'), `${publicKeyPem}\n`, { mode: 0o600 });
 
       console.log('Self-host license installed.');
       console.log(`  Organization: ${claims.org_name || claims.sub}`);

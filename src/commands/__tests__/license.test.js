@@ -122,7 +122,7 @@ describe('license command', () => {
     expect(subcommands).toContain('deactivate');
   });
 
-  it('install-selfhost validates and writes the secret files', async () => {
+  it('install-selfhost validates and writes the license secret only', async () => {
     const fs = await import('node:fs');
     const { jwt, publicPem } = makeSignedSelfHostLicense();
 
@@ -167,11 +167,56 @@ describe('license command', () => {
 
     expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/selfhost-secrets', { recursive: true, mode: 0o700 });
     expect(fs.writeFileSync).toHaveBeenCalledWith(join('/tmp/selfhost-secrets', 'license_key'), `${jwt}\n`, { mode: 0o600 });
-    expect(fs.writeFileSync).toHaveBeenCalledWith(join('/tmp/selfhost-secrets', 'license_public_key'), `${publicPem.trim()}\n`, { mode: 0o600 });
+    expect(fs.writeFileSync).not.toHaveBeenCalledWith(join('/tmp/selfhost-secrets', 'license_public_key'), expect.anything(), expect.anything());
     const output = logSpy.mock.calls.map(c => c[0]).join('\n');
     expect(output).toContain('Self-host license installed.');
     expect(output).toContain('Self Host Organization');
     expect(output).not.toContain(jwt);
+  });
+
+  it('install-selfhost validates with the embedded public key by default', async () => {
+    const fs = await import('node:fs');
+    const { jwt, publicPem } = makeSignedSelfHostLicense();
+
+    fs.existsSync.mockImplementation((path) => path === '.env.selfhost.production.local');
+    fs.readFileSync.mockImplementation((path) => {
+      if (path === '.env.selfhost.production.local') {
+        return [
+          'SELFHOST_SECRET_DIR=/tmp/selfhost-secrets',
+          'MARTY_LICENSE_REQUIRED_ISSUER=marty-license-issuer',
+          'MARTY_LICENSE_REQUIRED_PLAN_TIER=system',
+          'MARTY_LICENSE_REQUIRED_PRODUCTS=ui-app',
+        ].join('\n');
+      }
+      if (path === '/tmp/license.jwt') {
+        return jwt;
+      }
+      if (String(path).endsWith('selfhost-production.pem')) {
+        return publicPem;
+      }
+      return '';
+    });
+
+    const { Command } = await import('commander');
+    const { registerLicenseCommands } = await import('../../commands/license.js');
+
+    const program = new Command();
+    program.exitOverride();
+    registerLicenseCommands(program);
+
+    await program.parseAsync([
+      'node',
+      'marty',
+      'license',
+      'install-selfhost',
+      '--env-file',
+      '.env.selfhost.production.local',
+      '--token-file',
+      '/tmp/license.jwt',
+    ]);
+
+    expect(fs.writeFileSync).toHaveBeenCalledWith(join('/tmp/selfhost-secrets', 'license_key'), `${jwt}\n`, { mode: 0o600 });
+    expect(fs.writeFileSync).not.toHaveBeenCalledWith(join('/tmp/selfhost-secrets', 'license_public_key'), expect.anything(), expect.anything());
   });
 
   it('install-selfhost rejects a license that misses the required product', async () => {
