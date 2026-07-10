@@ -21,6 +21,22 @@ describe('apiCore', () => {
       expect(getErrorMessage(err)).toBe('Bad input');
     });
 
+    it('getErrorMessage should extract structured MIP error_description messages', () => {
+      const err = {
+        response: {
+          error: 'service_error',
+          error_description: {
+            error: 'audit_log_unavailable',
+            message: 'Organization audit log storage is not configured for this deployment.',
+          },
+          message_id: 'msg-audit-1',
+        },
+        message: 'Not Implemented',
+      };
+
+      expect(getErrorMessage(err)).toBe('Organization audit log storage is not configured for this deployment.');
+    });
+
     it('getErrorMessage should handle network errors', () => {
       const err = { message: 'Failed to fetch' };
       expect(getErrorMessage(err)).toContain('Unable to connect');
@@ -71,13 +87,25 @@ describe('apiCore', () => {
 
   describe('createApiClient', () => {
     let originalFetch;
+    let originalWindow;
 
     beforeEach(() => {
       originalFetch = globalThis.fetch;
+      originalWindow = globalThis.window;
     });
 
     afterEach(() => {
       globalThis.fetch = originalFetch;
+      if (originalWindow === undefined) {
+        delete globalThis.window;
+      } else {
+        Object.defineProperty(globalThis, 'window', {
+          value: originalWindow,
+          configurable: true,
+          writable: true,
+        });
+      }
+      vi.restoreAllMocks();
     });
 
     it('should create a client with all expected methods', () => {
@@ -199,6 +227,40 @@ describe('apiCore', () => {
       }
     });
 
+    it('should preserve structured MIP error descriptions from non-OK responses', async () => {
+      globalThis.fetch = vi.fn(async () => {
+        return new Response(JSON.stringify({
+          error: 'service_error',
+          error_description: {
+            error: 'audit_log_unavailable',
+            message: 'Organization audit log storage is not configured for this deployment.',
+          },
+          message_id: 'msg-audit-1',
+        }), {
+          status: 501,
+          statusText: 'Not Implemented',
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+      const client = createApiClient({ baseUrl: 'http://test' });
+
+      await expect(client.get('/v1/audit-events')).rejects.toMatchObject({
+        status: 501,
+        response: {
+          error: 'service_error',
+          message_id: 'msg-audit-1',
+        },
+      });
+
+      try {
+        await client.get('/v1/audit-events');
+        expect.unreachable();
+      } catch (err) {
+        expect(getErrorMessage(err)).toBe('Organization audit log storage is not configured for this deployment.');
+      }
+    });
+
     it('apiClient should wrap result in { data }', async () => {
       globalThis.fetch = vi.fn(async () => {
         return new Response(JSON.stringify({ items: [1, 2, 3] }), {
@@ -210,6 +272,29 @@ describe('apiCore', () => {
       const client = createApiClient({ baseUrl: 'http://test' });
       const result = await client.apiClient.get('/v1/items');
       expect(result.data).toEqual({ items: [1, 2, 3] });
+    });
+
+    it('should suppress retry warnings in browser runtime', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      Object.defineProperty(globalThis, 'window', {
+        value: { document: {} },
+        configurable: true,
+        writable: true,
+      });
+      globalThis.fetch = vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+
+      const client = createApiClient({ baseUrl: 'http://test' });
+
+      await expect(client.fetchWithRetry(
+        'http://test/v1/items',
+        { method: 'GET' },
+        { maxRetries: 1, baseDelay: 1, maxDelay: 1, backoffMultiplier: 1 },
+      )).rejects.toThrow('Failed to fetch');
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      expect(warnSpy).not.toHaveBeenCalled();
     });
   });
 });
