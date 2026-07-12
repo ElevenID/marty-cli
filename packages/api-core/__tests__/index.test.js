@@ -170,7 +170,7 @@ describe('apiCore', () => {
       await client.get('/v1/test');
       expect(capturedOpts.headers['Authorization']).toBe('Bearer tok123');
       expect(capturedOpts.headers['X-Request-ID']).toBeTruthy();
-      expect(capturedOpts.headers['X-MIP-Version']).toBe('0.1');
+      expect(capturedOpts.headers['X-MIP-Version']).toBe('0.3.0');
     });
 
     it('should include credentials from requestOptions', async () => {

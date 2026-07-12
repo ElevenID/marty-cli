@@ -196,7 +196,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
           ...options.headers,
         };
         headers['X-Request-ID'] = generateRequestId();
-        headers['X-MIP-Version'] = '0.1';
+        headers['X-MIP-Version'] = '0.3.0';
 
         const mergedOpts = { ...envOpts, ...options, headers };
 
@@ -282,7 +282,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-MIP-Version': '0.1',
+          'X-MIP-Version': '0.3.0',
           ...envOpts.headers,
         },
         ...(envOpts.credentials ? { credentials: envOpts.credentials } : {}),
