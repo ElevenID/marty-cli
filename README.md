@@ -76,7 +76,9 @@ node bin/marty.js orgs switch <org-id>
 | `marty orgs list` | List organizations |
 | `marty credentials list` | List issued credentials |
 | `marty applications list` | List credential applications |
-| `marty applications apply` | Apply for a credential (interactive template picker) |
+| `marty applications apply` | Create and submit an application from an active Application Template |
+| `marty applications claim <id>` | Create or refresh an offer-ready credential offer |
+| `marty applications approve <id>` | Acquire a reviewer lock and approve an organization application |
 | `marty verify start` | Start a verification session (interactive policy picker) |
 | `marty verify status <id>` | Check session status |
 | `marty license install-selfhost` | Validate an issuer-signed self-host license and write it into `SELFHOST_SECRET_DIR` |
@@ -115,7 +117,7 @@ marty auth login
 Mutation commands support `--dry-run` to preview without executing:
 
 ```bash
-marty applications apply <config-id> --dry-run
+marty applications apply <application-template-id> --form-data '{"email":"holder@example.com"}' --dry-run
 marty credentials revoke <id> --dry-run
 marty verify start --policy <id> --dry-run
 ```
@@ -136,8 +138,8 @@ marty completion fish | source
 ## E2E Testing
 
 ```bash
-# Full scenario (health + issuance + verification + wallet-interop)
-marty test e2e --credential-config <id> --policy <id>
+# Full scenario (health + applicant issuance + verification + wallet interoperability)
+marty test e2e --application-template <id> --credential-template <id> --policy <id>
 
 # Health check only
 marty test e2e --scenario health

@@ -84,33 +84,32 @@ async function scenarioHealthCheck(runner) {
   });
 }
 
-async function scenarioIssuanceFlow(runner, credentialConfigId) {
+async function scenarioIssuanceFlow(runner, applicationTemplateId) {
   const config = loadConfig();
 
-  // Get applicant (current user)
-  const applicant = await runner.runStep('Resolve applicant', async () => {
-    return await get('/v1/applicants/me');
-  });
-
-  const applicantId = applicant?.applicant_id || applicant?.id;
-
-  // Create application
   const application = await runner.runStep('Create application', async () => {
-    return await post('/v1/applicants/applications', {
-      applicant_id: applicantId,
-      credential_configuration_id: credentialConfigId,
+    return await post('/v1/me/applications', {
       organization_id: config.organizationId,
+      application_template_id: applicationTemplateId,
+      form_data: {},
+      integration_context: { source: 'marty-cli-e2e' },
     });
   });
 
-  const applicationId = application?.application_id || application?.id;
+  const applicationId = application?.id;
 
-  // Auto-issue (approve + issue in one step)
-  const credential = await runner.runStep('Auto-issue credential', async () => {
-    return await post(`/v1/applicants/applications/${encodeURIComponent(applicationId)}/auto-issue`);
+  const submitted = await runner.runStep('Submit application', async () => {
+    return await post(`/v1/me/applications/${encodeURIComponent(applicationId)}/submit`, {});
   });
 
-  return { applicantId, applicationId, credential };
+  let claim = null;
+  if (String(submitted?.claim_state || '').toUpperCase() === 'OFFER_READY') {
+    claim = await runner.runStep('Claim credential offer', async () => {
+      return await post(`/v1/me/applications/${encodeURIComponent(applicationId)}/claim`, {});
+    });
+  }
+
+  return { applicationId, application: submitted, claim };
 }
 
 async function scenarioVerification(runner, policyId) {
@@ -206,7 +205,8 @@ export function registerTestCommands(program) {
   test
     .command('e2e')
     .description('Run end-to-end integration scenario')
-    .option('--credential-config <id>', 'Credential configuration ID for issuance flow')
+    .option('--application-template <id>', 'Active Application Template ID for the applicant flow')
+    .option('--credential-template <id>', 'Active Credential Template ID for direct wallet interoperability')
     .option('--policy <id>', 'Presentation policy ID for verification flow')
     .option('--scenario <name>', 'Run a specific scenario: health, issuance, verification, wallet-interop, full', 'full')
     .option('-o, --output <format>', 'Output format (table|json)', 'table')
@@ -240,10 +240,10 @@ export function registerTestCommands(program) {
 
         // Issuance
         if (['issuance', 'full'].includes(scenario)) {
-          if (!opts.credentialConfig) {
-            fail('--credential-config is required for issuance scenario');
+          if (!opts.applicationTemplate) {
+            fail('--application-template is required for issuance scenario');
           }
-          await scenarioIssuanceFlow(runner, opts.credentialConfig);
+          await scenarioIssuanceFlow(runner, opts.applicationTemplate);
         }
 
         // Verification
@@ -256,10 +256,10 @@ export function registerTestCommands(program) {
 
         // Wallet interop (OID4VCI v1 conformance)
         if (['wallet-interop', 'full'].includes(scenario)) {
-          if (!opts.credentialConfig) {
-            fail('--credential-config is required for wallet-interop scenario');
+          if (!opts.credentialTemplate) {
+            fail('--credential-template is required for wallet-interop scenario');
           }
-          await scenarioWalletInterop(runner, opts.credentialConfig);
+          await scenarioWalletInterop(runner, opts.credentialTemplate);
         }
       } catch {
         success = false;
