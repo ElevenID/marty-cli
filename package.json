@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Marty CLI — command-line client for the Marty Identity Platform",
   "type": "module",
-  "private": true,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "workspaces": [
     "packages/*"
   ],
@@ -33,13 +36,13 @@
     "url": "https://github.com/ElevenID/marty-cli.git"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.14.0"
   },
   "dependencies": {
-    "@elevenid/marty-api-core": "workspace:*",
+    "@elevenid/marty-api-core": "^0.1.0",
     "commander": "^12.1.0"
   },
   "devDependencies": {
-    "vitest": "^1.3.0"
+    "vitest": "^4.1.10"
   }
 }

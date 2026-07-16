@@ -1,0 +1,4 @@
+﻿# Exact reviewed false positives from the pre-publication full-history audit.
+# Each entry binds one finding to its commit, path, rule, and line; new findings still fail.
+
+37f9f73674bf81cab737609d650ed58e10ca9d4a:src/lib/__tests__/auth-edge-cases.test.js:stripe-access-token:149

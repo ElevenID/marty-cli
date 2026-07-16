@@ -1,0 +1,86 @@
+name: Release npm packages
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Validate tag and package versions
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          test "$(node -p "require('./package.json').version")" = "$version"
+          test "$(node -p "require('./packages/api-core/package.json').version")" = "$version"
+      - run: npm ci
+      - run: npm test
+      - name: Build release evidence
+        run: |
+          mkdir -p dist
+          npm sbom --sbom-format cyclonedx > dist/marty-cli-sbom.cdx.json
+          npm sbom --workspace @elevenid/marty-api-core --sbom-format cyclonedx > dist/marty-api-core-sbom.cdx.json
+          npm pack --workspace @elevenid/marty-api-core --pack-destination dist
+          npm pack --pack-destination dist
+          cd dist && sha256sum ./*.tgz > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: marty-cli-release
+          path: dist
+          retention-days: 7
+
+  publish-npm:
+    if: vars.ENABLE_PUBLIC_REGISTRY_PUBLISHING == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: marty-cli-release
+          path: dist
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Publish with npm trusted publishing
+        shell: bash
+        run: |
+          npm publish dist/elevenid-marty-api-core-*.tgz --access public --provenance
+          npm publish dist/elevenid-marty-cli-*.tgz --access public --provenance
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: marty-cli-release
+          path: dist
+      - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: dist/*.tgz
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: |
+            dist/*.tgz
+            dist/*sbom*.json
+            dist/SHA256SUMS
+          generate_release_notes: true
