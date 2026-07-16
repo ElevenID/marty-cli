@@ -7,6 +7,7 @@ export default defineConfig({
       'packages/**/__tests__/**/*.test.js',
     ],
     environment: 'node',
+    clearMocks: true,
     testTimeout: 10000,
   },
 });

@@ -18,8 +18,17 @@
     "api",
     "http-client"
   ],
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ElevenID/marty-cli.git",
+    "directory": "packages/api-core"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.14.0"
   }
 }
