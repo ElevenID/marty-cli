@@ -13,14 +13,21 @@ export function registerCredentialsCommands(program) {
     .command('list')
     .description('List issued credentials')
     .option('-o, --output <format>', 'Output format (table|json)', 'table')
+    .option('--org', 'List organization credentials instead of holder-safe inventory')
+    .option('--status <status>', 'Filter by lifecycle status')
     .option('--limit <n>', 'Max results', '50')
     .action(withErrorHandler(async (opts) => {
       const config = loadConfig();
       const params = new URLSearchParams({ limit: opts.limit });
-      if (config.organizationId) params.set('organization_id', config.organizationId);
+      if (opts.status) params.set('status', opts.status);
+      if (opts.org) {
+        if (!config.organizationId) fail('No active organization. Run: marty orgs switch <id>');
+        params.set('organization_id', config.organizationId);
+      }
 
-      const data = await get(`/v1/issued-credentials?${params}`);
-      const list = Array.isArray(data) ? data : data?.credentials || [];
+      const path = opts.org ? '/v1/issued-credentials' : '/v1/issued-credentials/mine';
+      const data = await get(`${path}?${params}`);
+      const list = Array.isArray(data) ? data : data?.items || [];
 
       const fmt = getFormatter(opts.output);
       if (opts.output.startsWith('json')) {
@@ -33,17 +40,25 @@ export function registerCredentialsCommands(program) {
         type: c.credential_type || c.type || '',
         status: c.status || '',
         issued: c.issued_at ? new Date(c.issued_at).toLocaleDateString() : '',
-        holder: c.holder_identifier || '',
       }));
-      fmt.printList(rows, ['id', 'type', 'status', 'issued', 'holder']);
+      fmt.printList(rows, ['id', 'type', 'status', 'issued']);
     }));
 
   creds
     .command('inspect <credentialId>')
     .description('Show details of a credential')
+    .option('--org', 'Inspect an organization credential as an operator')
     .option('-o, --output <format>', 'Output format (table|json)', 'json')
     .action(withErrorHandler(async (credentialId, opts) => {
-      const data = await get(`/v1/issued-credentials/${encodeURIComponent(credentialId)}`);
+      let data;
+      if (opts.org) {
+        data = await get(`/v1/issued-credentials/${encodeURIComponent(credentialId)}`);
+      } else {
+        const inventory = await get('/v1/issued-credentials/mine?limit=500');
+        const items = Array.isArray(inventory) ? inventory : inventory?.items || [];
+        data = items.find((item) => item.id === credentialId);
+        if (!data) fail(`Credential ${credentialId} was not found in your inventory`);
+      }
       const fmt = getFormatter(opts.output);
       fmt.print(data);
     }));

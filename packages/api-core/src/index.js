@@ -37,6 +37,39 @@ function isRetryable(error, response, config) {
   return false;
 }
 
+function isBrowserRuntime() {
+  return typeof window !== 'undefined' && typeof window.document !== 'undefined';
+}
+
+function logRetryWarning(message) {
+  if (!isBrowserRuntime()) {
+    console.warn(message);
+  }
+}
+
+function toErrorMessage(value) {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Error) return toErrorMessage(value.message);
+  if (Array.isArray(value)) {
+    const messages = value.map(item => toErrorMessage(item)).filter(Boolean);
+    return messages.length ? messages.join('; ') : null;
+  }
+  if (typeof value === 'object') {
+    return toErrorMessage(value.user_message)
+      || toErrorMessage(value.message)
+      || toErrorMessage(value.error_description)
+      || toErrorMessage(value.detail)
+      || toErrorMessage(value.description)
+      || toErrorMessage(value.error);
+  }
+  return null;
+}
+
 async function parseErrorResponse(response) {
   try {
     const data = await response.json();
@@ -95,13 +128,20 @@ function generateRequestId() {
 // ── Error helpers (stateless — no config needed) ────────────────────
 
 export function getErrorMessage(error) {
-  if (error?.response?.error?.user_message) return error.response.error.user_message;
-  if (error?.response?.errors?.[0]?.user_message) return error.response.errors[0].user_message;
+  const responseMessage = toErrorMessage(error?.error_description)
+    || toErrorMessage(error?.detail)
+    || toErrorMessage(error?.response?.error?.user_message)
+    || toErrorMessage(error?.response?.error_description)
+    || toErrorMessage(error?.response?.data?.error_description)
+    || toErrorMessage(error?.response?.data?.detail)
+    || toErrorMessage(error?.response?.errors?.[0]?.user_message);
+  if (responseMessage) return responseMessage;
+
   if (error?.message) {
     if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
       return 'Unable to connect to the server. Please check your internet connection.';
     }
-    return error.message;
+    return toErrorMessage(error.message) || 'An unexpected error occurred. Please try again.';
   }
   return 'An unexpected error occurred. Please try again.';
 }
@@ -156,7 +196,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
           ...options.headers,
         };
         headers['X-Request-ID'] = generateRequestId();
-        headers['X-MIP-Version'] = '0.1';
+        headers['X-MIP-Version'] = '0.3.1';
 
         const mergedOpts = { ...envOpts, ...options, headers };
 
@@ -166,7 +206,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
 
         if (shouldRetry && attempt < config.maxRetries && isRetryable(null, response, config)) {
           const delay = calculateDelay(attempt, config);
-          console.warn(
+          logRetryWarning(
             `Request failed with status ${response.status}, retrying in ${delay}ms ` +
             `(attempt ${attempt + 1}/${config.maxRetries})`,
           );
@@ -185,7 +225,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
         if (error.response) throw error;
         if (shouldRetry && attempt < config.maxRetries && isRetryable(error, null, config)) {
           const delay = calculateDelay(attempt, config);
-          console.warn(
+          logRetryWarning(
             `Request failed with ${error.name}: ${error.message}, retrying in ${delay}ms ` +
             `(attempt ${attempt + 1}/${config.maxRetries})`,
           );
@@ -242,7 +282,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-MIP-Version': '0.1',
+          'X-MIP-Version': '0.3.1',
           ...envOpts.headers,
         },
         ...(envOpts.credentials ? { credentials: envOpts.credentials } : {}),

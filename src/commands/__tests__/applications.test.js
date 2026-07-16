@@ -1,7 +1,4 @@
-/**
- * Tests for cli/commands/applications.js
- */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/apiAdapter.js', () => ({
   get: vi.fn(),
@@ -17,24 +14,19 @@ vi.mock('../../lib/config.js', () => ({
   })),
 }));
 
-vi.mock('../../lib/auth.js', () => ({
-  isLoggedIn: vi.fn(() => true),
-  getAuthHeaders: vi.fn(() => ({ 'X-API-Key': 'test-key' })),
-}));
-
 vi.mock('../../lib/prompt.js', () => ({
-  ask: vi.fn(),
   select: vi.fn(),
   isInteractive: vi.fn(() => false),
 }));
 
-describe('applications command', () => {
-  let logSpy, errSpy, exitSpy;
+describe('canonical applications command', () => {
+  let logSpy;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(process, 'exit').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -42,209 +34,204 @@ describe('applications command', () => {
     vi.resetModules();
   });
 
-  it('registers applications command with subcommands', async () => {
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
-
-    const subcommands = [];
-
-    const fakeSubcmd = {
-      command: vi.fn(function (name) { subcommands.push(name.split(' ')[0]); return this; }),
-      alias: vi.fn(function () { return this; }),
-      description: vi.fn(function () { return this; }),
-      option: vi.fn(function () { return this; }),
-      requiredOption: vi.fn(function () { return this; }),
-      action: vi.fn(function () { return this; }),
-    };
-
-    const fakeCmd = {
-      command: vi.fn(() => ({
-        ...fakeSubcmd,
-        alias: vi.fn().mockReturnValue({
-          ...fakeSubcmd,
-          command: vi.fn((n) => { subcommands.push(n.split(' ')[0]); return fakeSubcmd; }),
-        }),
-        description: vi.fn().mockReturnValue({
-          ...fakeSubcmd,
-          command: vi.fn((n) => { subcommands.push(n.split(' ')[0]); return fakeSubcmd; }),
-        }),
-      })),
-    };
-
-    registerApplicationsCommands(fakeCmd);
-    expect(subcommands).toContain('list');
-    expect(subcommands).toContain('inspect');
-    expect(subcommands).toContain('apply');
-    expect(subcommands).toContain('approve');
-    expect(subcommands).toContain('reject');
-    expect(subcommands).toContain('issue');
-  });
-
-  it('applications list outputs JSON for personal apps', async () => {
-    const { get } = await import('../../lib/apiAdapter.js');
+  async function program() {
     const { Command } = await import('commander');
     const { registerApplicationsCommands } = await import('../../commands/applications.js');
+    const command = new Command();
+    command.exitOverride();
+    registerApplicationsCommands(command);
+    return command;
+  }
 
-    // /v1/auth/me
-    get.mockResolvedValueOnce({ user_id: 'user-1' });
-    // /v1/applicants/by-user/user-1
-    get.mockResolvedValueOnce({ id: 'app-profile-1' });
-    // /v1/applicants/<id>/applications
-    get.mockResolvedValueOnce({
-      applications: [
-        { id: 'app-1', credential_configuration_id: 'DriverLicense', status: 'approved', created_at: '2026-01-01T00:00:00Z' },
-      ],
-    });
+  it('registers holder and organization lifecycle commands', async () => {
+    const command = await program();
+    const applications = command.commands.find((entry) => entry.name() === 'applications');
+    const names = applications.commands.map((entry) => entry.name());
 
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
-
-    await program.parseAsync(['node', 'marty', 'applications', 'list', '-o', 'json']);
-
-    const output = logSpy.mock.calls.map(c => c[0]).join('');
-    const parsed = JSON.parse(output);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].id).toBe('app-1');
+    expect(names).toEqual(expect.arrayContaining([
+      'list', 'inspect', 'apply', 'submit', 'withdraw', 'claim',
+      'approve', 'reject', 'request-info', 'issue',
+    ]));
   });
 
-  it('applications list --org lists org applications', async () => {
+  it('lists personal applications through /v1/me', async () => {
     const { get } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
-
     get.mockResolvedValue({
-      applications: [
-        { id: 'org-app-1', status: 'pending' },
-        { id: 'org-app-2', status: 'approved' },
-      ],
+      items: [{ id: 'app-1', application_template_id: 'template-1', status: 'SUBMITTED' }],
+      total: 1,
     });
 
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
+    const command = await program();
+    await command.parseAsync(['node', 'marty', 'applications', 'list', '-o', 'json']);
 
-    await program.parseAsync(['node', 'marty', 'applications', 'list', '--org', '-o', 'json']);
-
-    const url = get.mock.calls[0][0];
-    expect(url).toContain('/v1/applicants/org-applications');
-    expect(url).toContain('organization_id=org-1');
+    expect(get).toHaveBeenCalledWith('/v1/me/applications?limit=50');
+    expect(JSON.parse(logSpy.mock.calls.map((call) => call[0]).join(''))[0].id).toBe('app-1');
   });
 
-  it('applications inspect fetches by ID', async () => {
+  it('filters personal status without sending an unsupported query field', async () => {
     const { get } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
+    get.mockResolvedValue({ items: [
+      { id: 'draft', status: 'DRAFT' },
+      { id: 'approved', status: 'APPROVED' },
+    ] });
 
-    get.mockResolvedValue({ id: 'app-42', status: 'approved' });
-
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
-
-    await program.parseAsync(['node', 'marty', 'applications', 'inspect', 'app-42']);
-
-    expect(get).toHaveBeenCalledWith('/v1/applicants/applications/app-42');
-  });
-
-  it('applications approve --dry-run does not call API', async () => {
-    const { post } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
-
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
-
-    await program.parseAsync(['node', 'marty', 'applications', 'approve', 'app-42', '--dry-run']);
-
-    expect(post).not.toHaveBeenCalled();
-    const output = logSpy.mock.calls.map(c => c[0]).join(' ');
-    expect(output).toContain('dry-run');
-  });
-
-  it('applications approve posts to approve endpoint', async () => {
-    const { post } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
-
-    post.mockResolvedValue({ ok: true });
-
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
-
-    await program.parseAsync([
-      'node', 'marty', 'applications', 'approve', 'app-42', '--notes', 'looks good',
+    const command = await program();
+    await command.parseAsync([
+      'node', 'marty', 'applications', 'list', '--status', 'approved', '-o', 'json',
     ]);
 
-    expect(post).toHaveBeenCalledWith(
-      '/v1/applicants/applications/app-42/approve',
-      { notes: 'looks good' },
-    );
+    expect(get).toHaveBeenCalledWith('/v1/me/applications?limit=50');
+    expect(JSON.parse(logSpy.mock.calls.map((call) => call[0]).join(''))).toEqual([
+      { id: 'approved', status: 'APPROVED' },
+    ]);
   });
 
-  it('applications reject --dry-run does not call API', async () => {
-    const { post } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
+  it('lists organization applications through the selected organization', async () => {
+    const { get } = await import('../../lib/apiAdapter.js');
+    get.mockResolvedValue([{ id: 'org-app-1', status: 'UNDER_REVIEW' }]);
 
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
+    const command = await program();
+    await command.parseAsync(['node', 'marty', 'applications', 'list', '--org', '-o', 'json']);
 
-    await program.parseAsync(['node', 'marty', 'applications', 'reject', 'app-42', '--dry-run']);
-
-    expect(post).not.toHaveBeenCalled();
+    expect(get.mock.calls[0][0]).toBe('/v1/organizations/org-1/applicants?limit=50');
   });
 
-  it('applications reject posts reason', async () => {
-    const { post } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
+  it('inspects self-service and reviewer resources explicitly', async () => {
+    const { get } = await import('../../lib/apiAdapter.js');
+    get.mockResolvedValue({ id: 'app-42' });
+    const command = await program();
 
-    post.mockResolvedValue({ ok: true });
+    await command.parseAsync(['node', 'marty', 'applications', 'inspect', 'app-42']);
+    await command.parseAsync(['node', 'marty', 'applications', 'inspect', 'app-42', '--org']);
 
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
+    expect(get).toHaveBeenNthCalledWith(1, '/v1/me/applications/app-42');
+    expect(get).toHaveBeenNthCalledWith(2, '/v1/organizations/org-1/applicants/app-42');
+  });
 
-    await program.parseAsync([
-      'node', 'marty', 'applications', 'reject', 'app-42', '--reason', 'incomplete docs',
+  it('creates, submits, and claims only with the canonical request contract', async () => {
+    const { get, post } = await import('../../lib/apiAdapter.js');
+    get.mockResolvedValue({ items: [] });
+    post
+      .mockResolvedValueOnce({ id: 'app-42', status: 'DRAFT' })
+      .mockResolvedValueOnce({ id: 'app-42', status: 'APPROVED', claim_state: 'OFFER_READY' })
+      .mockResolvedValueOnce({ id: 'app-42', claim_state: 'OFFER_READY', credential_offer_uri: 'openid-credential-offer://ready' });
+
+    const command = await program();
+    await command.parseAsync([
+      'node', 'marty', 'applications', 'apply', 'application-template-1',
+      '--form-data', '{"email":"holder@example.test"}',
+      '--integration-context', '{"source":"cli-test"}',
+      '-o', 'json',
     ]);
 
-    expect(post).toHaveBeenCalledWith(
-      '/v1/applicants/applications/app-42/reject',
-      { reason: 'incomplete docs' },
+    expect(post).toHaveBeenNthCalledWith(1, '/v1/me/applications', {
+      organization_id: 'org-1',
+      application_template_id: 'application-template-1',
+      form_data: { email: 'holder@example.test' },
+      integration_context: { source: 'cli-test' },
+    });
+    expect(post).toHaveBeenNthCalledWith(2, '/v1/me/applications/app-42/submit', {});
+    expect(post).toHaveBeenNthCalledWith(3, '/v1/me/applications/app-42/claim', {});
+    const body = post.mock.calls[0][1];
+    expect(body).not.toHaveProperty('applicant_id');
+    expect(body).not.toHaveProperty('credential_configuration_id');
+    expect(body).not.toHaveProperty('issuing_authority');
+    expect(body).not.toHaveProperty('metadata');
+  });
+
+  it('does not claim a submitted application that is not offer-ready', async () => {
+    const { get, post } = await import('../../lib/apiAdapter.js');
+    get.mockResolvedValue({ items: [] });
+    post
+      .mockResolvedValueOnce({ id: 'app-42', status: 'DRAFT' })
+      .mockResolvedValueOnce({ id: 'app-42', status: 'SUBMITTED', claim_state: 'NOT_READY' });
+
+    const command = await program();
+    await command.parseAsync(['node', 'marty', 'applications', 'apply', 'application-template-1']);
+
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it('claims an existing offer-ready application instead of duplicating it', async () => {
+    const { get, post } = await import('../../lib/apiAdapter.js');
+    get.mockResolvedValue({ items: [{
+      id: 'existing-1',
+      application_template_id: 'application-template-1',
+      status: 'APPROVED',
+      claim_state: 'OFFER_READY',
+    }] });
+    post.mockResolvedValue({ id: 'existing-1', credential_offer_uri: 'openid-credential-offer://fresh' });
+
+    const command = await program();
+    await command.parseAsync(['node', 'marty', 'applications', 'apply', 'application-template-1']);
+
+    expect(post).toHaveBeenCalledOnce();
+    expect(post).toHaveBeenCalledWith('/v1/me/applications/existing-1/claim', {});
+  });
+
+  it('acquires and releases the reviewer lock around approval', async () => {
+    const { post, del } = await import('../../lib/apiAdapter.js');
+    post.mockResolvedValue({});
+    del.mockResolvedValue({ released: true });
+
+    const command = await program();
+    await command.parseAsync(['node', 'marty', 'applications', 'approve', 'app-42', '--notes', 'looks good']);
+
+    const base = '/v1/organizations/org-1/applicants/app-42';
+    expect(post).toHaveBeenNthCalledWith(1, `${base}/lock`, {});
+    expect(post).toHaveBeenNthCalledWith(2, `${base}/approve`, { notes: 'looks good' });
+    expect(del).toHaveBeenCalledWith(`${base}/lock`);
+  });
+
+  it('releases the reviewer lock when a decision fails', async () => {
+    const { post, del } = await import('../../lib/apiAdapter.js');
+    post.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('decision failed'));
+    del.mockResolvedValue({ released: true });
+
+    const command = await program();
+    await command.parseAsync([
+      'node', 'marty', 'applications', 'reject', 'app-42', '--reason', 'incomplete',
+    ]);
+
+    expect(del).toHaveBeenCalledWith('/v1/organizations/org-1/applicants/app-42/lock');
+  });
+
+  it('requests information under a reviewer lock', async () => {
+    const { post, del } = await import('../../lib/apiAdapter.js');
+    post.mockResolvedValue({});
+    del.mockResolvedValue({ released: true });
+
+    const command = await program();
+    await command.parseAsync([
+      'node', 'marty', 'applications', 'request-info', 'app-42',
+      '--message', 'Upload proof', '--missing', 'proof_of_address',
+    ]);
+
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      '/v1/organizations/org-1/applicants/app-42/request-information',
+      { message: 'Upload proof', missing_items: ['proof_of_address'] },
     );
+    expect(del).toHaveBeenCalledOnce();
   });
 
-  it('applications issue --dry-run does not call API', async () => {
+  it('initiates issuance through the organization resource', async () => {
     const { post } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
+    post.mockResolvedValue({ id: 'app-42', claim_state: 'OFFER_READY' });
 
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
+    const command = await program();
+    await command.parseAsync(['node', 'marty', 'applications', 'issue', 'app-42']);
 
-    await program.parseAsync(['node', 'marty', 'applications', 'issue', 'app-42', '--dry-run']);
-
-    expect(post).not.toHaveBeenCalled();
+    expect(post).toHaveBeenCalledWith('/v1/organizations/org-1/applicants/app-42/issue', {});
   });
 
-  it('applications issue posts to issue endpoint', async () => {
-    const { post } = await import('../../lib/apiAdapter.js');
-    const { Command } = await import('commander');
-    const { registerApplicationsCommands } = await import('../../commands/applications.js');
+  it('never contains a removed applicant route', async () => {
+    const source = await import('node:fs/promises').then((fs) => fs.readFile(
+      new URL('../../commands/applications.js', import.meta.url),
+      'utf8',
+    ));
 
-    post.mockResolvedValue({ credential_offer_uri: 'openid-credential-offer://...' });
-
-    const program = new Command();
-    program.exitOverride();
-    registerApplicationsCommands(program);
-
-    await program.parseAsync(['node', 'marty', 'applications', 'issue', 'app-42']);
-
-    expect(post).toHaveBeenCalledWith('/v1/applicants/applications/app-42/issue');
+    expect(source).not.toContain('/v1/applicants');
+    expect(source).not.toContain('credential_configuration_id');
   });
 });

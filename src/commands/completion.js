@@ -27,7 +27,7 @@ _marty_completions() {
       subcommands="list inspect revoke"
       ;;
     applications|apps)
-      subcommands="list inspect apply approve reject issue"
+      subcommands="list inspect apply submit withdraw claim approve reject request-info issue"
       ;;
     verify)
       subcommands="start status submit evaluate sessions inspect"
@@ -123,7 +123,7 @@ _marty() {
           _describe -t subcommands 'credentials command' subcommands
           ;;
         applications|apps)
-          subcommands=('list:List applications' 'inspect:Show details' 'apply:Apply for credential' 'approve:Approve application' 'reject:Reject application' 'issue:Issue credential')
+          subcommands=('list:List applications' 'inspect:Show details' 'apply:Apply for credential' 'submit:Submit draft' 'withdraw:Withdraw application' 'claim:Claim offer' 'approve:Approve application' 'reject:Reject application' 'request-info:Request applicant information' 'issue:Initiate issuance')
           _describe -t subcommands 'applications command' subcommands
           ;;
         verify)
@@ -183,7 +183,7 @@ complete -c marty -n "not __fish_seen_subcommand_from $commands" -a completion -
 complete -c marty -n "__fish_seen_subcommand_from auth" -a "login logout whoami"
 complete -c marty -n "__fish_seen_subcommand_from orgs" -a "list switch current"
 complete -c marty -n "__fish_seen_subcommand_from credentials" -a "list inspect revoke"
-complete -c marty -n "__fish_seen_subcommand_from applications" -a "list inspect apply approve reject issue"
+complete -c marty -n "__fish_seen_subcommand_from applications" -a "list inspect apply submit withdraw claim approve reject request-info issue"
 complete -c marty -n "__fish_seen_subcommand_from verify" -a "start status submit evaluate sessions inspect"
 complete -c marty -n "__fish_seen_subcommand_from flows" -a "list inspect"
 complete -c marty -n "__fish_seen_subcommand_from templates" -a "list inspect"

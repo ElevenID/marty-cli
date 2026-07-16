@@ -87,7 +87,7 @@ describe('CLI → Gateway endpoint alignment', () => {
       expect(url).toContain('/v1/issued-credentials');
     });
 
-    it('uses /v1/issued-credentials/{id} for credential inspection', async () => {
+    it('uses /v1/issued-credentials/{id} for explicit organization inspection', async () => {
       const { Command } = await import('commander');
       const { registerCredentialsCommands } = await import('../../commands/credentials.js');
 
@@ -95,7 +95,9 @@ describe('CLI → Gateway endpoint alignment', () => {
       program.exitOverride();
       registerCredentialsCommands(program);
 
-      await program.parseAsync(['node', 'marty', 'credentials', 'inspect', 'cred-42', '-o', 'json']);
+      await program.parseAsync([
+        'node', 'marty', 'credentials', 'inspect', 'cred-42', '--org', '-o', 'json',
+      ]);
 
       const url = apiCalls.get[0];
       expect(url).toBe('/v1/issued-credentials/cred-42');

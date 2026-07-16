@@ -64,9 +64,9 @@ describe('credentials command', () => {
     const { registerCredentialsCommands } = await import('../../commands/credentials.js');
 
     get.mockResolvedValue({
-      credentials: [
-        { id: 'cred-1', credential_type: 'DriverLicense', status: 'active', issued_at: '2026-01-01T00:00:00Z', holder_identifier: 'did:example:alice' },
-        { id: 'cred-2', credential_type: 'Passport', status: 'revoked', issued_at: '2026-02-01T00:00:00Z', holder_identifier: 'did:example:bob' },
+      items: [
+        { id: 'cred-1', credential_type: 'DriverLicense', status: 'active', issued_at: '2026-01-01T00:00:00Z' },
+        { id: 'cred-2', credential_type: 'Passport', status: 'revoked', issued_at: '2026-02-01T00:00:00Z' },
       ],
     });
 
@@ -81,7 +81,7 @@ describe('credentials command', () => {
     expect(parsed[0].id).toBe('cred-1');
   });
 
-  it('credentials list passes organization_id and limit', async () => {
+  it('credentials list defaults to holder-safe inventory', async () => {
     const { get } = await import('../../lib/apiAdapter.js');
     const { Command } = await import('commander');
     const { registerCredentialsCommands } = await import('../../commands/credentials.js');
@@ -96,8 +96,21 @@ describe('credentials command', () => {
 
     expect(get).toHaveBeenCalled();
     const url = get.mock.calls[0][0];
-    expect(url).toContain('limit=10');
-    expect(url).toContain('organization_id=org-1');
+    expect(url).toBe('/v1/issued-credentials/mine?limit=10');
+  });
+
+  it('credentials list requires explicit org mode for organization inventory', async () => {
+    const { get } = await import('../../lib/apiAdapter.js');
+    const { Command } = await import('commander');
+    const { registerCredentialsCommands } = await import('../../commands/credentials.js');
+    get.mockResolvedValue({ items: [] });
+    const program = new Command();
+    program.exitOverride();
+    registerCredentialsCommands(program);
+
+    await program.parseAsync(['node', 'marty', 'credentials', 'list', '--org', '--limit', '10', '-o', 'json']);
+
+    expect(get).toHaveBeenCalledWith('/v1/issued-credentials?limit=10&organization_id=org-1');
   });
 
   it('credentials inspect fetches by ID', async () => {
@@ -105,7 +118,7 @@ describe('credentials command', () => {
     const { Command } = await import('commander');
     const { registerCredentialsCommands } = await import('../../commands/credentials.js');
 
-    get.mockResolvedValue({ id: 'cred-42', status: 'active' });
+    get.mockResolvedValue({ items: [{ id: 'cred-42', status: 'active' }] });
 
     const program = new Command();
     program.exitOverride();
@@ -113,10 +126,24 @@ describe('credentials command', () => {
 
     await program.parseAsync(['node', 'marty', 'credentials', 'inspect', 'cred-42']);
 
-    expect(get).toHaveBeenCalledWith('/v1/issued-credentials/cred-42');
+    expect(get).toHaveBeenCalledWith('/v1/issued-credentials/mine?limit=500');
     const output = logSpy.mock.calls.map(c => c[0]).join('');
     const parsed = JSON.parse(output);
     expect(parsed.id).toBe('cred-42');
+  });
+
+  it('credentials inspect uses operator detail only with --org', async () => {
+    const { get } = await import('../../lib/apiAdapter.js');
+    const { Command } = await import('commander');
+    const { registerCredentialsCommands } = await import('../../commands/credentials.js');
+    get.mockResolvedValue({ id: 'cred-42', status: 'active' });
+    const program = new Command();
+    program.exitOverride();
+    registerCredentialsCommands(program);
+
+    await program.parseAsync(['node', 'marty', 'credentials', 'inspect', 'cred-42', '--org']);
+
+    expect(get).toHaveBeenCalledWith('/v1/issued-credentials/cred-42');
   });
 
   it('credentials revoke --dry-run does not call API', async () => {
