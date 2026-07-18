@@ -36,7 +36,7 @@
     "url": "https://github.com/ElevenID/marty-cli.git"
   },
   "engines": {
-    "node": ">=22.14.0"
+    "node": ">=24"
   },
   "dependencies": {
     "@elevenid/marty-api-core": "^0.1.0",
