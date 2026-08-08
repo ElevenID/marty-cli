@@ -6,12 +6,13 @@ Provides `createApiClient()` — a framework-agnostic HTTP factory with:
 - Exponential-backoff retry for GET requests
 - Structured error parsing (MIP error envelope)
 - Request-ID generation
+- Marty Protocol 0.4 version negotiation on every request
 - Helper utilities: `getErrorMessage`, `getErrorCode`, `isAuthError`, `isRetryableError`, `handleApiError`
 
 ## Usage
 
 ```js
-import { createApiClient, getErrorMessage } from '@elevenid/marty-api-core';
+import { MIP_VERSION, createApiClient, getErrorMessage } from '@elevenid/marty-api-core';
 
 // Browser (cookie auth)
 const api = createApiClient({
