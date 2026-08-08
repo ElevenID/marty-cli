@@ -8,6 +8,7 @@
  */
 
 import { Command } from 'commander';
+import { readFileSync } from 'node:fs';
 import { registerAuthCommands } from '../src/commands/auth.js';
 import { registerHealthCommand } from '../src/commands/health.js';
 import { registerOrgsCommands } from '../src/commands/orgs.js';
@@ -26,11 +27,14 @@ import { registerTrustCommands } from '../src/commands/trust.js';
 import { registerLicenseCommands } from '../src/commands/license.js';
 
 const program = new Command();
+const packageVersion = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version;
 
 program
   .name('marty')
   .description('Marty Identity Platform CLI')
-  .version('0.1.0')
+  .version(packageVersion)
   .option('--global-output <format>', 'Default output format for all commands (table|json|json-compact)');
 
 // Propagate global --global-output to subcommands that don't specify their own
