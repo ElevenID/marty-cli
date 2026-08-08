@@ -36,8 +36,8 @@ jobs:
         run: |
           npm install \
             --prefix "$RUNNER_TEMP/marty-cli-release-smoke" \
-            dist/elevenid-marty-api-core-*.tgz \
-            dist/elevenid-marty-cli-*.tgz
+            ./dist/elevenid-marty-api-core-*.tgz \
+            ./dist/elevenid-marty-cli-*.tgz
           "$RUNNER_TEMP/marty-cli-release-smoke/node_modules/.bin/marty" --version
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
