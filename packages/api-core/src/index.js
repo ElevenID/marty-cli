@@ -10,6 +10,8 @@
  * No browser-specific APIs (import.meta.env, cookies, DOM) are used here.
  */
 
+export const MIP_VERSION = '0.4.0';
+
 const DEFAULT_RETRY_CONFIG = {
   maxRetries: 3,
   baseDelay: 1000,
@@ -196,7 +198,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
           ...options.headers,
         };
         headers['X-Request-ID'] = generateRequestId();
-        headers['X-MIP-Version'] = '0.3.1';
+        headers['X-MIP-Version'] = MIP_VERSION;
 
         const mergedOpts = { ...envOpts, ...options, headers };
 
@@ -282,7 +284,7 @@ export function createApiClient({ baseUrl = '', requestOptions = () => ({}) } = 
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-MIP-Version': '0.3.1',
+          'X-MIP-Version': MIP_VERSION,
           ...envOpts.headers,
         },
         ...(envOpts.credentials ? { credentials: envOpts.credentials } : {}),
