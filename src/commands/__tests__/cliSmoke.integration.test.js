@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
@@ -185,6 +186,16 @@ describe('marty CLI binary smoke coverage', () => {
   beforeEach(async () => {
     gateway = await startGatewayStub();
     homeDir = await mkdtemp(join(tmpdir(), 'marty-cli-smoke-'));
+  });
+
+  it('reports the version declared by the shipped package', async () => {
+    const packageVersion = JSON.parse(
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+    ).version;
+    const version = await runCli(homeDir, gateway.baseUrl, ['--version']);
+
+    expect(version.code).toBe(0);
+    expect(version.stdout).toBe(packageVersion);
   });
 
   afterEach(async () => {

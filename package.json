@@ -1,6 +1,6 @@
 {
   "name": "@elevenid/marty-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Marty CLI — command-line client for the Marty Identity Platform",
   "type": "module",
   "publishConfig": {
@@ -39,7 +39,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@elevenid/marty-api-core": "^0.1.0",
+    "@elevenid/marty-api-core": "0.2.1",
     "commander": "^15.0.0"
   },
   "devDependencies": {
