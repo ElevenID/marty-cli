@@ -10,7 +10,7 @@
  * No browser-specific APIs (import.meta.env, cookies, DOM) are used here.
  */
 
-export const MIP_VERSION = '0.4.0';
+export const MIP_VERSION = '0.4.1';
 
 const DEFAULT_RETRY_CONFIG = {
   maxRetries: 3,
