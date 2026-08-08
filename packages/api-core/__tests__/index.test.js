@@ -17,7 +17,7 @@ import {
 
 describe('apiCore', () => {
   it('exports the current Marty Protocol version', () => {
-    expect(MIP_VERSION).toBe('0.4.0');
+    expect(MIP_VERSION).toBe('0.4.1');
   });
 
   describe('error helpers', () => {
@@ -175,7 +175,7 @@ describe('apiCore', () => {
       await client.get('/v1/test');
       expect(capturedOpts.headers['Authorization']).toBe('Bearer tok123');
       expect(capturedOpts.headers['X-Request-ID']).toBeTruthy();
-      expect(capturedOpts.headers['X-MIP-Version']).toBe('0.4.0');
+      expect(capturedOpts.headers['X-MIP-Version']).toBe('0.4.1');
     });
 
     it('should include credentials from requestOptions', async () => {
