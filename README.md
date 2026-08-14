@@ -9,7 +9,7 @@ The canonical implementation is the Rust workspace:
 - `crates/marty-cli` owns command parsing, authentication, configuration,
   output, e2e scenarios, and license validation.
 - `crates/marty-api-client` owns MIP headers, request IDs, structured errors,
-  and GET-only retry policy.
+  GET-only retry policy, and both native and browser/WASM transport bindings.
 - `tests/behavior/cli_cases.json` is the implementation-independent command
   contract used to prove behavior across implementation changes.
 
@@ -18,9 +18,10 @@ and ARM64. The `@elevenid/marty-cli` npm package remains a supported install
 channel; its small `bin/marty.js` adapter only locates and starts the matching
 platform binary. It contains no CLI, protocol, authentication, or license logic.
 
-The remaining `packages/api-core` JavaScript package is browser-only and no
-longer used by the CLI. It stays available until `marty-ui` completes its
-Rust/WASM API-client cutover.
+The `packages/api-core` package preserves the established JavaScript factory
+surface for browser consumers, but its HTTP behavior is implemented by the
+same Rust crate through WebAssembly. Its small adapter contains only method
+bindings and the legacy Axios-like `{ data }` response facade.
 
 ## Quick start
 
@@ -133,11 +134,15 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --locked
 cargo build --workspace --release --locked
 
-# Browser-only compatibility package until the Rust/WASM cutover
+# Build and test the Rust/WASM browser compatibility package
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.127 --locked
+npm run build:wasm
 npm ci
 npm test
 ```
 
 The native test suite covers the public command vectors, authenticated HTTP
 workflows, configuration and credential persistence, structured MIP errors,
-GET-only retries, all supported license tiers, and fail-closed invalid inputs.
+GET-only retries, browser/WASM compatibility, all supported license tiers, and
+fail-closed invalid inputs.

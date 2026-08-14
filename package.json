@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "start": "node bin/marty.js",
+    "build:wasm": "cargo build --package marty-api-client --target wasm32-unknown-unknown --release && wasm-bindgen --target bundler --out-dir packages/api-core/src/wasm --out-name marty_api_client target/wasm32-unknown-unknown/release/marty_api_client.wasm",
     "test": "vitest run packages/api-core"
   },
   "keywords": [

@@ -10,6 +10,9 @@ use tokio::time::sleep;
 use url::Url;
 use uuid::Uuid;
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
+
 pub const MIP_VERSION: &str = "0.4.1";
 
 const RETRYABLE_STATUSES: [StatusCode; 6] = [

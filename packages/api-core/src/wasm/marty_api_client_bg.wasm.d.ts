@@ -1,0 +1,31 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_martyapiclient_free: (a: number, b: number) => void;
+export const getErrorCode: (a: any) => [number, number];
+export const getErrorMessage: (a: any) => [number, number];
+export const handleApiError: (a: any) => any;
+export const isAuthError: (a: any) => number;
+export const isRetryableError: (a: any) => number;
+export const martyapiclient_apiRequest: (a: number, b: number, c: number, d: any) => any;
+export const martyapiclient_delete: (a: number, b: number, c: number, d: any) => any;
+export const martyapiclient_fetchWithRetry: (a: number, b: number, c: number, d: any, e: any) => any;
+export const martyapiclient_get: (a: number, b: number, c: number, d: any) => any;
+export const martyapiclient_new: (a: number, b: number, c: number) => number;
+export const martyapiclient_patch: (a: number, b: number, c: number, d: any, e: any) => any;
+export const martyapiclient_post: (a: number, b: number, c: number, d: any, e: any) => any;
+export const martyapiclient_put: (a: number, b: number, c: number, d: any, e: any) => any;
+export const martyapiclient_reportClientError: (a: number, b: any) => any;
+export const mipVersion: () => [number, number];
+export const wasm_bindgen__convert__closures_____invoke__ha7949276e3463deb: (a: number, b: number, c: any) => [number, number];
+export const wasm_bindgen__convert__closures_____invoke__h25b0e9adf71482ab: (a: number, b: number, c: any, d: any) => void;
+export const wasm_bindgen__convert__closures_____invoke__hd7058d8e349b10c4: (a: number, b: number) => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_destroy_closure: (a: number, b: number) => void;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_start: () => void;

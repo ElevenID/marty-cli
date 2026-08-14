@@ -173,9 +173,10 @@ describe('apiCore', () => {
         }),
       });
       await client.get('/v1/test');
-      expect(capturedOpts.headers['Authorization']).toBe('Bearer tok123');
-      expect(capturedOpts.headers['X-Request-ID']).toBeTruthy();
-      expect(capturedOpts.headers['X-MIP-Version']).toBe('0.4.1');
+      const headers = new Headers(capturedOpts.headers);
+      expect(headers.get('Authorization')).toBe('Bearer tok123');
+      expect(headers.get('X-Request-ID')).toBeTruthy();
+      expect(headers.get('X-MIP-Version')).toBe('0.4.1');
     });
 
     it('should include credentials from requestOptions', async () => {
@@ -209,6 +210,57 @@ describe('apiCore', () => {
       const client = createApiClient({ baseUrl: 'http://test' });
       await client.post('/v1/items', { name: 'Test' });
       expect(JSON.parse(capturedBody)).toEqual({ name: 'Test' });
+    });
+
+    it('should encode query parameters without mutating caller options', async () => {
+      let capturedUrl;
+      globalThis.fetch = vi.fn(async (url) => {
+        capturedUrl = url;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+      const options = { params: { query: 'Ada Lovelace', page: 2 }, cache: 'no-store' };
+      const client = createApiClient({ baseUrl: 'http://test' });
+      await client.get('/v1/items?active=true', options);
+
+      expect(capturedUrl).toBe('http://test/v1/items?active=true&query=Ada+Lovelace&page=2');
+      expect(options).toEqual({ params: { query: 'Ada Lovelace', page: 2 }, cache: 'no-store' });
+    });
+
+    it('should honor caller-provided retryable status policy for GET', async () => {
+      globalThis.fetch = vi.fn()
+        .mockResolvedValueOnce(new Response('{}', { status: 418, statusText: 'Teapot' }))
+        .mockResolvedValueOnce(new Response('{}', { status: 418, statusText: 'Teapot' }))
+        .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+      const client = createApiClient({ baseUrl: 'http://test' });
+      const response = await client.fetchWithRetry(
+        'http://test/v1/items',
+        { method: 'GET' },
+        { maxRetries: 2, baseDelay: 0, maxDelay: 0, retryableStatuses: [418] },
+      );
+
+      expect(response.status).toBe(200);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('should never retry mutation requests', async () => {
+      globalThis.fetch = vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+
+      const client = createApiClient({ baseUrl: 'http://test' });
+      await expect(client.post('/v1/items', { name: 'Ada' })).rejects.toThrow('Failed to fetch');
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return null for successful non-JSON responses', async () => {
+      globalThis.fetch = vi.fn(async () => new Response(null, { status: 204 }));
+      const client = createApiClient({ baseUrl: 'http://test' });
+      await expect(client.del('/v1/items/1')).resolves.toBeNull();
     });
 
     it('should throw on non-OK response with parsed error', async () => {
