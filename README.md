@@ -1,224 +1,143 @@
 # Marty CLI
 
-Command-line client for the **Marty Identity Platform**.
+Native command-line client for the **Marty Identity Platform**.
 
-## Native Rust migration
+## Architecture
 
-The canonical CLI and MIP HTTP protocol client now live in the Rust workspace:
+The canonical implementation is the Rust workspace:
 
 - `crates/marty-cli` owns command parsing, authentication, configuration,
   output, e2e scenarios, and license validation.
 - `crates/marty-api-client` owns MIP headers, request IDs, structured errors,
   and GET-only retry policy.
 - `tests/behavior/cli_cases.json` is the implementation-independent command
-  contract used to prove parity during the cutover.
+  contract used to prove behavior across implementation changes.
 
-The JavaScript implementation remains temporarily in-tree only as a comparison
-oracle and because `@elevenid/marty-api-core` still has a browser consumer in
-`marty-ui`. It will be deleted after the browser consumes the Rust-backed
-package and the native release packaging is verified.
+GitHub releases contain native binaries for Linux, Windows, and macOS on x64
+and ARM64. The `@elevenid/marty-cli` npm package remains a supported install
+channel; its small `bin/marty.js` adapter only locates and starts the matching
+platform binary. It contains no CLI, protocol, authentication, or license logic.
 
-## Legacy architecture during cutover
+The remaining `packages/api-core` JavaScript package is browser-only and no
+longer used by the CLI. It stays available until `marty-ui` completes its
+Rust/WASM API-client cutover.
 
-```
-marty-cli/
-├── packages/
-│   └── api-core/              ← @elevenid/marty-api-core (shared HTTP factory)
-│       ├── src/index.js       ← createApiClient, error helpers
-│       └── __tests__/
-├── bin/
-│   └── marty.js               ← CLI entry point
-├── src/
-│   ├── lib/                   ← CLI-specific: auth, config, output, prompt
-│   │   ├── apiAdapter.js      ← Wraps api-core with API-key / Bearer auth
-│   │   ├── auth.js
-│   │   ├── config.js
-│   │   ├── output.js
-│   │   └── prompt.js
-│   └── commands/              ← Command groups (12 modules)
-│       ├── auth.js
-│       ├── health.js
-│       ├── orgs.js
-│       ├── credentials.js
-│       ├── applications.js
-│       ├── verify.js
-│       ├── flows.js
-│       ├── templates.js
-│       ├── config.js
-│       ├── teste2e.js
-│       ├── init.js
-│       └── completion.js
-└── vitest.config.js
-```
-
-### Shared Layer: `@elevenid/marty-api-core`
-
-The `packages/api-core/` package provides a framework-agnostic HTTP client factory
-(`createApiClient`) used by both this CLI and the browser UI (`marty-ui`).
-It handles retry logic, error parsing, and request-ID generation with zero
-platform-specific dependencies.
-
-This package is the **separation layer** between consumers:
-
-| Consumer | Auth Strategy | URL Source |
-|----------|--------------|------------|
-| `marty-cli` | API key / Bearer token | `~/.marty/config.json` |
-| `marty-ui` | Cookie (`credentials: 'include'`) | `VITE_API_URL` |
-| `marty-integration-tests` | Session cookie / Bearer | env vars |
-
-## Quick Start
+## Quick start
 
 ```bash
-# Install dependencies (workspace-aware)
-npm install
+# Native development build
+cargo build --package marty-cli
+cargo run --package marty-cli -- init
 
-# First-time interactive setup
-node bin/marty.js init
-
-# Or configure manually
-node bin/marty.js auth login --api-key <your-key>
-node bin/marty.js config set apiUrl http://localhost:8000
-node bin/marty.js orgs switch <org-id>
+# Or after installing a release
+marty auth login --api-key <your-key>
+marty config set apiUrl http://localhost:8000
+marty orgs switch <org-id>
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `marty init` | Interactive first-time setup wizard |
-| `marty auth login` | Authenticate (API key or OAuth2 client credentials) |
+| `marty init` | Interactive setup wizard |
+| `marty auth login` | Authenticate with an API key or OAuth2 client credentials |
 | `marty auth whoami` | Show current authentication status |
 | `marty health` | Check API health |
-| `marty orgs list` | List organizations |
-| `marty credentials list` | List issued credentials |
-| `marty applications list` | List credential applications |
-| `marty applications apply` | Create and submit an application from an active Application Template |
-| `marty applications claim <id>` | Create or refresh an offer-ready credential offer |
-| `marty applications approve <id>` | Acquire a reviewer lock and approve an organization application |
-| `marty verify start` | Start a verification session (interactive policy picker) |
-| `marty verify status <id>` | Check session status |
-| `marty license install-selfhost` | Validate an issuer-signed self-host license and write it into `SELFHOST_SECRET_DIR` |
-| `marty templates list` | List credential templates |
-| `marty flows list` | List configured flows |
-| `marty test e2e` | Run end-to-end integration tests |
-| `marty completion bash` | Generate shell completions |
+| `marty orgs` | List, create, inspect, or switch organizations |
+| `marty credentials` | List, inspect, issue, verify, or revoke credentials |
+| `marty applications` | Run applicant and organization-review workflows |
+| `marty verify` | Start, submit, evaluate, and inspect verification sessions |
+| `marty flows` | List, create, execute, inspect, and approve flows |
+| `marty templates` | List and inspect application templates |
+| `marty credential-templates` | Create, inspect, and publish credential templates |
+| `marty compliance` | Manage compliance profiles |
+| `marty trust` | Manage trust profiles |
+| `marty license` | Activate, inspect, validate, and install licenses |
+| `marty test e2e` | Run headless platform scenarios |
+| `marty completion` | Generate Bash, Zsh, or Fish completions |
 
-## Global Options
-
-```
--o, --output <format>  Output format: table, json, json-compact
---help                 Show help for any command
---version              Show version
-```
+Aliases from the previous CLI remain available: `apps`, `creds`, and `ct`.
 
 ## Authentication
 
-**API Key** (simplest):
 ```bash
 marty auth login --api-key <key>
-```
-
-**OAuth2 Client Credentials**:
-```bash
 marty auth login --client-id <id> --client-secret <secret>
+marty auth login # guided interactive login
 ```
 
-**Interactive** (guided):
+`MARTY_API_KEY` overrides stored credentials. OAuth2 bearer tokens, API keys,
+and integration-test session cookies remain supported in the native client.
+
+## Output and dry runs
+
+Commands support table, pretty JSON, and compact JSON output. Mutation commands
+support `--dry-run` and print the exact HTTP action and JSON payload without
+making a request.
+
 ```bash
-marty auth login
+marty --global-output json orgs list
+marty credentials issue \
+  --credential-template-id <id> \
+  --flow-execution-id <id> \
+  --subject-claims '{"given_name":"Ada"}' \
+  --dry-run
 ```
 
-## Dry Run
-
-Mutation commands support `--dry-run` to preview without executing:
+## End-to-end scenarios
 
 ```bash
-marty applications apply <application-template-id> --form-data '{"email":"holder@example.com"}' --dry-run
-marty credentials revoke <id> --dry-run
-marty verify start --policy <id> --dry-run
-```
+# Health, applicant issuance, verification, and wallet interoperability
+marty test e2e \
+  --application-template <id> \
+  --credential-template <id> \
+  --policy <id>
 
-## Shell Completions
-
-```bash
-# Bash — add to ~/.bashrc
-eval "$(marty completion bash)"
-
-# Zsh — add to ~/.zshrc
-eval "$(marty completion zsh)"
-
-# Fish
-marty completion fish | source
-```
-
-## E2E Testing
-
-```bash
-# Full scenario (health + applicant issuance + verification + wallet interoperability)
-marty test e2e --application-template <id> --credential-template <id> --policy <id>
-
-# Health check only
 marty test e2e --scenario health
-
-# Dry run (no API calls)
-marty test e2e --dry-run
+marty test e2e --scenario full --dry-run
 ```
 
-## Self-Host License Install
+## Self-host license install
 
-`marty license install-selfhost` does not mint a production license. It validates an issuer-signed Ed25519 JWT against the same issuer, plan-tier, and entitled-product policy that the self-host runtime enforces, then writes the token into `SELFHOST_SECRET_DIR/license_key`.
-
-The Marty issuer public verification key is embedded in the CLI and self-host runtime image. Customer deployments should not provide or mount a replacement public key.
-
-To avoid echoing the token into shell history or terminal output, pipe the JWT on stdin:
+`marty license install-selfhost` validates an issuer-signed Ed25519 JWT against
+the issuer, plan-tier, activation, expiry, and entitled-product policy before
+writing only the token to `SELFHOST_SECRET_DIR/license_key`. It does not mint a
+license or install a caller-supplied trust key in production.
 
 ```bash
 cat /path/to/customer-license.jwt | marty license install-selfhost \
-   --env-file /path/to/.env.selfhost.production.local \
-   --token-stdin
+  --env-file /path/to/.env.selfhost.production.local \
+  --token-stdin
 ```
 
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `MARTY_API_URL` | Override API base URL |
-| `MARTY_ORG_ID` | Override active organization ID |
-| `MARTY_API_KEY` | Override API key (skips stored credentials) |
+The public-key override options are retained for development and behavioral
+testing only.
 
 ## Configuration
 
-Config is stored at `~/.marty/config.json`, credentials at `~/.marty/credentials.json` (mode 0600).
+Configuration is stored at `~/.marty/config.json`; credentials are stored at
+`~/.marty/credentials.json` with private file permissions where supported.
 
-```bash
-marty config show          # Display current config
-marty config set apiUrl http://myserver:8000
-```
+| Variable | Description |
+|----------|-------------|
+| `MARTY_API_URL` | Override the API base URL |
+| `MARTY_ORG_ID` | Override the active organization ID |
+| `MARTY_API_KEY` | Override the stored API key |
+| `MARTY_CONFIG_DIR` | Override the configuration directory for isolated automation |
 
 ## Development
 
 ```bash
-# Native formatting, lint, and behavioral tests
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --locked
+cargo build --workspace --release --locked
 
-# Transitional legacy and cross-language comparison suite
+# Browser-only compatibility package until the Rust/WASM cutover
 npm ci
 npm test
-
-# Run the native CLI
-cargo run -p marty-cli -- --help
 ```
 
-## Migration from marty-ui
-
-This repo was extracted from `marty-ui/cli/`. The key changes:
-
-1. **`apiCore.js` → `@elevenid/marty-api-core`**: The shared HTTP factory is now a proper
-   npm workspace package instead of a cross-directory import.
-2. **`apiAdapter.js`**: Now imports from `@elevenid/marty-api-core` instead of
-   `../../ui/src/services/apiCore.js`.
-3. **File structure**: `cli/commands/` → `src/commands/`, `cli/lib/` → `src/lib/`.
-4. **`marty-ui`** should be updated to depend on `@elevenid/marty-api-core` instead of
-   its local `apiCore.js` (see the api-core README for integration instructions).
+The native test suite covers the public command vectors, authenticated HTTP
+workflows, configuration and credential persistence, structured MIP errors,
+GET-only retries, all supported license tiers, and fail-closed invalid inputs.

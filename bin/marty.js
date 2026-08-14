@@ -1,66 +1,52 @@
 #!/usr/bin/env node
 
-/**
- * Marty CLI — command-line client for the Marty Identity Platform.
- *
- * Uses @elevenid/marty-api-core for HTTP communication and
- * local command modules for domain operations.
- */
+// npm distribution adapter only. All CLI behavior lives in the Rust binary.
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
-import { Command } from 'commander';
-import { readFileSync } from 'node:fs';
-import { registerAuthCommands } from '../src/commands/auth.js';
-import { registerHealthCommand } from '../src/commands/health.js';
-import { registerOrgsCommands } from '../src/commands/orgs.js';
-import { registerCredentialsCommands } from '../src/commands/credentials.js';
-import { registerFlowsCommands } from '../src/commands/flows.js';
-import { registerApplicationsCommands } from '../src/commands/applications.js';
-import { registerVerifyCommands } from '../src/commands/verify.js';
-import { registerTemplatesCommands } from '../src/commands/templates.js';
-import { registerConfigCommands } from '../src/commands/config.js';
-import { registerTestCommands } from '../src/commands/teste2e.js';
-import { registerInitCommand } from '../src/commands/init.js';
-import { registerCompletionCommand } from '../src/commands/completion.js';
-import { registerCredentialTemplatesCommands } from '../src/commands/credentialTemplates.js';
-import { registerComplianceCommands } from '../src/commands/compliance.js';
-import { registerTrustCommands } from '../src/commands/trust.js';
-import { registerLicenseCommands } from '../src/commands/license.js';
+const require = createRequire(import.meta.url);
+const target = `${process.platform}-${process.arch}`;
+const packageNames = {
+  'darwin-arm64': '@elevenid/marty-cli-darwin-arm64',
+  'darwin-x64': '@elevenid/marty-cli-darwin-x64',
+  'linux-arm64': '@elevenid/marty-cli-linux-arm64',
+  'linux-x64': '@elevenid/marty-cli-linux-x64',
+  'win32-arm64': '@elevenid/marty-cli-win32-arm64',
+  'win32-x64': '@elevenid/marty-cli-win32-x64',
+};
 
-const program = new Command();
-const packageVersion = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-).version;
-
-program
-  .name('marty')
-  .description('Marty Identity Platform CLI')
-  .version(packageVersion)
-  .option('--global-output <format>', 'Default output format for all commands (table|json|json-compact)');
-
-// Propagate global --global-output to subcommands that don't specify their own
-program.hook('preAction', (thisCommand, actionCommand) => {
-  const globalOutput = program.opts().globalOutput;
-  if (globalOutput && !actionCommand.getOptionValue('output')) {
-    actionCommand.setOptionValue('output', globalOutput);
+function installedBinary(packageName) {
+  if (!packageName) return null;
+  try {
+    const packagePath = require.resolve(`${packageName}/package.json`);
+    return join(dirname(packagePath), 'bin', process.platform === 'win32' ? 'marty.exe' : 'marty');
+  } catch {
+    return null;
   }
-});
+}
 
-// Register command groups
-registerAuthCommands(program);
-registerHealthCommand(program);
-registerOrgsCommands(program);
-registerCredentialsCommands(program);
-registerApplicationsCommands(program);
-registerVerifyCommands(program);
-registerFlowsCommands(program);
-registerTemplatesCommands(program);
-registerCredentialTemplatesCommands(program);
-registerComplianceCommands(program);
-registerTrustCommands(program);
-registerLicenseCommands(program);
-registerConfigCommands(program);
-registerTestCommands(program);
-registerInitCommand(program);
-registerCompletionCommand(program);
+function developmentBinary() {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const executable = process.platform === 'win32' ? 'marty.exe' : 'marty';
+  for (const profile of ['release', 'debug']) {
+    const candidate = join(root, 'target', profile, executable);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
-program.parse();
+const binary = installedBinary(packageNames[target]) || developmentBinary();
+if (!binary || !existsSync(binary)) {
+  console.error(`error: no Marty native binary is installed for ${target}`);
+  process.exit(1);
+}
+
+const result = spawnSync(binary, process.argv.slice(2), { stdio: 'inherit' });
+if (result.error) {
+  console.error(`error: failed to start Marty: ${result.error.message}`);
+  process.exit(1);
+}
+process.exit(result.status ?? 1);

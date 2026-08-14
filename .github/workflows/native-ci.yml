@@ -27,15 +27,15 @@ jobs:
         run: |
           rustup toolchain install 1.93.0 --profile minimal --component clippy,rustfmt
           rustup default 1.93.0
-      - name: Install transitional legacy dependencies
+      - name: Install browser-package dependencies
         run: npm ci
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Lint all targets
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Run native and cross-language behavioral suites
+      - name: Run native behavioral suites
         run: cargo test --workspace --locked
-      - name: Run the legacy suite until cutover
+      - name: Run the browser API compatibility suite
         run: npm test
 
   release-build:

@@ -13,13 +13,19 @@ rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
 url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
 wiremock = "0.6"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+tokio = { version = "1.49", features = ["time"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio.workspace = true
 
 [lints]
 workspace = true
