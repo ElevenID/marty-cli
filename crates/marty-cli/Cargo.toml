@@ -1,0 +1,37 @@
+[package]
+name = "marty-cli"
+description = "Native command-line client for the Marty Identity Platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "marty"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+chrono.workspace = true
+clap.workspace = true
+dirs.workspace = true
+dialoguer.workspace = true
+ed25519-dalek.workspace = true
+marty-api-client = { path = "../marty-api-client" }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.1"
+predicates = "3.1"
+tempfile = "3.24"
+wiremock = "0.6"
+
+[lints]
+workspace = true

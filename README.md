@@ -2,7 +2,23 @@
 
 Command-line client for the **Marty Identity Platform**.
 
-## Architecture
+## Native Rust migration
+
+The canonical CLI and MIP HTTP protocol client now live in the Rust workspace:
+
+- `crates/marty-cli` owns command parsing, authentication, configuration,
+  output, e2e scenarios, and license validation.
+- `crates/marty-api-client` owns MIP headers, request IDs, structured errors,
+  and GET-only retry policy.
+- `tests/behavior/cli_cases.json` is the implementation-independent command
+  contract used to prove parity during the cutover.
+
+The JavaScript implementation remains temporarily in-tree only as a comparison
+oracle and because `@elevenid/marty-api-core` still has a browser consumer in
+`marty-ui`. It will be deleted after the browser consumes the Rust-backed
+package and the native release packaging is verified.
+
+## Legacy architecture during cutover
 
 ```
 marty-cli/
@@ -182,14 +198,17 @@ marty config set apiUrl http://myserver:8000
 ## Development
 
 ```bash
-# Run all tests (CLI + api-core)
+# Native formatting, lint, and behavioral tests
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --locked
+
+# Transitional legacy and cross-language comparison suite
+npm ci
 npm test
 
-# Watch mode
-npm run test:watch
-
-# Run just the CLI
-node bin/marty.js --help
+# Run the native CLI
+cargo run -p marty-cli -- --help
 ```
 
 ## Migration from marty-ui

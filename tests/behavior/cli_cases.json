@@ -1,0 +1,81 @@
+[
+  {
+    "name": "create organization",
+    "args": ["orgs", "create", "--name", "Acme", "--owner-id", "owner-1", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/organizations", "\"display_name\": \"Acme\"", "\"visibility\": \"PRIVATE\""]
+  },
+  {
+    "name": "issue credential",
+    "args": ["credentials", "issue", "--credential-template-id", "ct-1", "--flow-execution-id", "flow-1", "--subject-claims", "{\"given_name\":\"Ada\"}", "--holder-identifier", "did:key:123", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/credentials/issue", "\"given_name\": \"Ada\"", "\"holder_identifier\": \"did:key:123\""]
+  },
+  {
+    "name": "verify credential",
+    "args": ["creds", "verify", "--credential", "header.payload.signature", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/credentials/verify", "\"credential\": \"header.payload.signature\""]
+  },
+  {
+    "name": "apply for credential",
+    "config": {"organizationId": "org-1"},
+    "args": ["apps", "apply", "app-template-1", "--form-data", "{\"employee\":true}", "--integration-context", "{\"source\":\"test\"}", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/me/applications", "\"application_template_id\": \"app-template-1\"", "\"employee\": true"]
+  },
+  {
+    "name": "request applicant information",
+    "config": {"organizationId": "org-1"},
+    "args": ["applications", "request-info", "app-1", "--message", "Upload ID", "--missing", "passport", "proof", "--deadline", "2027-01-01", "--dry-run"],
+    "stdout_contains": ["/request-information", "\"missing_items\": [", "\"passport\"", "\"deadline\": \"2027-01-01\""]
+  },
+  {
+    "name": "start verification",
+    "config": {"organizationId": "org-1"},
+    "args": ["verify", "start", "--policy", "policy-1", "--trust-profile", "trust-1", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/flows/verify", "\"presentation_policy_id\": \"policy-1\"", "\"trust_profile_id\": \"trust-1\""]
+  },
+  {
+    "name": "evaluate presentation",
+    "args": ["verify", "evaluate", "--credential", "{\"vp\":true}", "--policy", "policy-1", "--dry-run"],
+    "stdout_contains": ["/v1/presentation-policies/policy-1/evaluate", "\"vp_token\": \"{\\\"vp\\\":true}\""]
+  },
+  {
+    "name": "create flow",
+    "config": {"organizationId": "org-1"},
+    "args": ["flows", "create", "--name", "Issue badge", "--flow-type", "issuance", "--credential-template-id", "ct-1", "--description", "Badge flow", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/flows/definitions", "\"approval_strategy\": \"auto\"", "\"description\": \"Badge flow\""]
+  },
+  {
+    "name": "execute flow",
+    "args": ["flows", "execute", "flow-1", "--context-data", "{\"approved\":true}", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/flows/instances", "\"initial_context\": {", "\"approved\": true"]
+  },
+  {
+    "name": "create credential template",
+    "config": {"organizationId": "org-1"},
+    "args": ["ct", "create", "--name", "Badge", "--credential-type", "EmployeeCredential", "--compliance-profile-id", "cp-1", "--trust-profile-id", "tp-1", "--claims", "[{\"name\":\"given_name\"}]", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/credential-templates", "\"credential_payload_format\": \"SD_JWT_VC\"", "\"issuer_algorithm\": \"ES256\""]
+  },
+  {
+    "name": "create compliance profile",
+    "config": {"organizationId": "org-1"},
+    "args": ["compliance", "create", "--name", "eIDAS", "--compliance-code", "eIDAS2", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/compliance-profiles", "\"issuance_protocol\": \"OID4VCI\"", "\"presentation_protocol\": \"OID4VP\""]
+  },
+  {
+    "name": "create trust profile",
+    "config": {"organizationId": "org-1"},
+    "args": ["trust", "create", "--name", "High assurance", "--allowed-algorithms", "[\"ES256\"]", "--supported-formats", "[\"SD_JWT_VC\"]", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/trust-profiles", "\"allowed_algorithms\": [", "\"key_storage\": \"software\""]
+  },
+  {
+    "name": "invalid structured input fails closed",
+    "args": ["credentials", "issue", "--credential-template-id", "ct-1", "--flow-execution-id", "flow-1", "--subject-claims", "not-json", "--dry-run"],
+    "exit_code": 1,
+    "stderr_contains": ["--subject-claims must be valid JSON"]
+  },
+  {
+    "name": "missing organization fails closed",
+    "args": ["flows", "create", "--name", "Issue badge", "--flow-type", "issuance", "--credential-template-id", "ct-1", "--dry-run"],
+    "exit_code": 1,
+    "stderr_contains": ["No active organization"]
+  }
+]
