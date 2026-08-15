@@ -1,0 +1,1 @@
+{"name":"@elevenid/marty-cli-win32-x64","version":"0.2.3","description":"Marty CLI native binary for Windows x64","license":"AGPL-3.0-only","os":["win32"],"cpu":["x64"],"files":["bin/"]}

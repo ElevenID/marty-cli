@@ -1,7 +1,7 @@
 {
   "name": "@elevenid/marty-api-core",
   "version": "0.2.3",
-  "description": "Shared HTTP client factory for the Marty Identity Platform — used by the CLI, browser UI, and integration tests",
+  "description": "Rust/WASM HTTP client for browser and JavaScript Marty Identity Platform consumers",
   "type": "module",
   "main": "src/index.js",
   "exports": {

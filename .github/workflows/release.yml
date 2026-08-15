@@ -1,4 +1,4 @@
-name: Release npm packages
+name: Release native CLI and API package
 
 on:
   push:
@@ -8,7 +8,54 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x64
+            executable: marty
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: linux-arm64
+            executable: marty
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: win32-x64
+            executable: marty.exe
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            artifact: win32-arm64
+            executable: marty.exe
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            artifact: darwin-x64
+            executable: marty
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            artifact: darwin-arm64
+            executable: marty
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the pinned Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal --target '${{ matrix.target }}'
+          rustup default 1.93.0
+      - name: Build native CLI
+        run: cargo build --package marty-cli --release --locked --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/${{ matrix.executable }}
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    needs: build-native
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -17,27 +64,63 @@ jobs:
           node-version: "24"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Validate tag and package versions
+      - name: Install the pinned Rust and WebAssembly toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.93.0
+          cargo install wasm-bindgen-cli --version 0.2.127 --locked
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: native-*
+          path: native
+      - name: Validate release versions
+        shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
           test "$(node -p "require('./package.json').version")" = "$version"
           test "$(node -p "require('./packages/api-core/package.json').version")" = "$version"
-      - run: npm ci
-      - run: npm test
-      - name: Build release evidence
+          for manifest in packages/cli-*/package.json; do
+            test "$(node -p "require('./$manifest').version")" = "$version"
+          done
+      - name: Populate platform packages and release binaries
+        shell: bash
         run: |
           mkdir -p dist
+          for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            mkdir -p "packages/cli-$target/bin"
+            cp "native/native-$target/marty" "packages/cli-$target/bin/marty"
+            chmod +x "packages/cli-$target/bin/marty"
+            cp "native/native-$target/marty" "dist/marty-$target"
+            chmod +x "dist/marty-$target"
+          done
+          for target in win32-x64 win32-arm64; do
+            mkdir -p "packages/cli-$target/bin"
+            cp "native/native-$target/marty.exe" "packages/cli-$target/bin/marty.exe"
+            cp "native/native-$target/marty.exe" "dist/marty-$target.exe"
+          done
+      - run: npm ci
+      - run: npm run build:wasm
+      - run: npm test
+      - name: Build release evidence and npm packages
+        shell: bash
+        run: |
           npm sbom --sbom-format cyclonedx > dist/marty-cli-sbom.cdx.json
           npm sbom --workspace @elevenid/marty-api-core --sbom-format cyclonedx > dist/marty-api-core-sbom.cdx.json
           npm pack --workspace @elevenid/marty-api-core --pack-destination dist
+          for package_dir in packages/cli-*; do
+            npm pack "./$package_dir" --pack-destination dist
+          done
           npm pack --pack-destination dist
-          cd dist && sha256sum ./*.tgz > SHA256SUMS
-      - name: Verify packed CLI and API Core install together
+          cd dist
+          sha256sum ./* > SHA256SUMS
+      - name: Verify the packed npm launcher uses the native binary
+        shell: bash
         run: |
           npm install \
             --prefix "$RUNNER_TEMP/marty-cli-release-smoke" \
-            ./dist/elevenid-marty-api-core-*.tgz \
-            ./dist/elevenid-marty-cli-*.tgz
+            ./dist/elevenid-marty-cli-linux-x64-*.tgz \
+            ./dist/elevenid-marty-cli-[0-9]*.tgz
           "$RUNNER_TEMP/marty-cli-release-smoke/node_modules/.bin/marty" --version
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -47,7 +130,7 @@ jobs:
 
   publish-npm:
     if: vars.ENABLE_PUBLIC_REGISTRY_PUBLISHING == 'true'
-    needs: build
+    needs: package
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -63,14 +146,17 @@ jobs:
           node-version: "24"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Publish with npm trusted publishing
+      - name: Publish platform packages before the launcher
         shell: bash
         run: |
+          for package in dist/elevenid-marty-cli-{linux,darwin,win32}-*.tgz; do
+            npm publish "$package" --access public --provenance
+          done
           npm publish dist/elevenid-marty-api-core-*.tgz --access public --provenance
-          npm publish dist/elevenid-marty-cli-*.tgz --access public --provenance
+          npm publish dist/elevenid-marty-cli-[0-9]*.tgz --access public --provenance
 
   github-release:
-    needs: build
+    needs: package
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -83,11 +169,8 @@ jobs:
           path: dist
       - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
-          subject-path: dist/*.tgz
+          subject-path: dist/*
       - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          files: |
-            dist/*.tgz
-            dist/*sbom*.json
-            dist/SHA256SUMS
+          files: dist/*
           generate_release_notes: true

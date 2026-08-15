@@ -1,0 +1,1 @@
+{"name":"@elevenid/marty-cli-linux-x64","version":"0.2.3","description":"Marty CLI native binary for Linux x64","license":"AGPL-3.0-only","os":["linux"],"cpu":["x64"],"files":["bin/"]}

@@ -8,20 +8,19 @@
     "provenance": true
   },
   "workspaces": [
-    "packages/*"
+    "packages/api-core"
   ],
   "bin": {
     "marty": "./bin/marty.js"
   },
   "files": [
     "bin/",
-    "src/",
     "README.md"
   ],
   "scripts": {
     "start": "node bin/marty.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "build:wasm": "cargo build --package marty-api-client --target wasm32-unknown-unknown --release && wasm-bindgen --target bundler --out-dir packages/api-core/src/wasm --out-name marty_api_client target/wasm32-unknown-unknown/release/marty_api_client.wasm",
+    "test": "vitest run packages/api-core"
   },
   "keywords": [
     "marty",
@@ -36,11 +35,15 @@
     "url": "https://github.com/ElevenID/marty-cli.git"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=20"
   },
-  "dependencies": {
-    "@elevenid/marty-api-core": "0.2.3",
-    "commander": "^15.0.0"
+  "optionalDependencies": {
+    "@elevenid/marty-cli-darwin-arm64": "0.2.3",
+    "@elevenid/marty-cli-darwin-x64": "0.2.3",
+    "@elevenid/marty-cli-linux-arm64": "0.2.3",
+    "@elevenid/marty-cli-linux-x64": "0.2.3",
+    "@elevenid/marty-cli-win32-arm64": "0.2.3",
+    "@elevenid/marty-cli-win32-x64": "0.2.3"
   },
   "devDependencies": {
     "vitest": "^4.1.10"
