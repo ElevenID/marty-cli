@@ -1,6 +1,6 @@
 {
   "name": "@elevenid/marty-cli",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Marty CLI — command-line client for the Marty Identity Platform",
   "type": "module",
   "publishConfig": {
@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "start": "node bin/marty.js",
-    "build:wasm": "cargo build --package marty-api-client --target wasm32-unknown-unknown --release && wasm-bindgen --target bundler --out-dir packages/api-core/src/wasm --out-name marty_api_client target/wasm32-unknown-unknown/release/marty_api_client.wasm",
+    "build:wasm": "cargo build --package marty-api-client --target wasm32-unknown-unknown --release && wasm-bindgen --target web --out-dir packages/api-core/src/wasm --out-name marty_api_client target/wasm32-unknown-unknown/release/marty_api_client.wasm",
     "test": "vitest run packages/api-core"
   },
   "keywords": [
@@ -38,12 +38,12 @@
     "node": ">=20"
   },
   "optionalDependencies": {
-    "@elevenid/marty-cli-darwin-arm64": "0.2.4",
-    "@elevenid/marty-cli-darwin-x64": "0.2.4",
-    "@elevenid/marty-cli-linux-arm64": "0.2.4",
-    "@elevenid/marty-cli-linux-x64": "0.2.4",
-    "@elevenid/marty-cli-win32-arm64": "0.2.4",
-    "@elevenid/marty-cli-win32-x64": "0.2.4"
+    "@elevenid/marty-cli-darwin-arm64": "0.2.5",
+    "@elevenid/marty-cli-darwin-x64": "0.2.5",
+    "@elevenid/marty-cli-linux-arm64": "0.2.5",
+    "@elevenid/marty-cli-linux-x64": "0.2.5",
+    "@elevenid/marty-cli-win32-arm64": "0.2.5",
+    "@elevenid/marty-cli-win32-x64": "0.2.5"
   },
   "devDependencies": {
     "vitest": "^4.1.10"

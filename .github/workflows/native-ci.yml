@@ -70,13 +70,44 @@ jobs:
       - name: Rebuild the Rust/WASM package
         run: npm run build:wasm
       - name: Prove public generated bindings are current
-        # wasm-bindgen's internal closure symbols include compiler hashes that
-        # are not stable across build roots. Compare the deterministic public
-        # wrapper and declaration instead; the following behavioral suite
-        # executes the newly generated binary.
+        # wasm-bindgen's web target includes compiler hashes in internal closure
+        # symbols. Normalize only those hashes before comparing the complete
+        # generated browser wrapper and declaration.
+        shell: bash
         run: |
-          git diff --exit-code -- \
-            packages/api-core/src/wasm/marty_api_client.js \
-            packages/api-core/src/wasm/marty_api_client.d.ts
+          python - <<'PY'
+          import difflib
+          import re
+          import subprocess
+          from pathlib import Path
+
+          paths = (
+              "packages/api-core/src/wasm/marty_api_client.js",
+              "packages/api-core/src/wasm/marty_api_client.d.ts",
+          )
+          closure_hash = re.compile(
+              r"(wasm_bindgen__convert__closures_____invoke__)h[0-9a-f]+"
+          )
+
+          failed = False
+          for path in paths:
+              expected = subprocess.check_output(
+                  ["git", "show", f"HEAD:{path}"], text=True
+              ).replace("\r\n", "\n")
+              actual = Path(path).read_text(encoding="utf-8").replace("\r\n", "\n")
+              expected = closure_hash.sub(r"\1hNORMALIZED", expected)
+              actual = closure_hash.sub(r"\1hNORMALIZED", actual)
+              if expected == actual:
+                  continue
+              failed = True
+              print("".join(difflib.unified_diff(
+                  expected.splitlines(keepends=True),
+                  actual.splitlines(keepends=True),
+                  fromfile=f"committed/{path}",
+                  tofile=f"regenerated/{path}",
+              )))
+
+          raise SystemExit(1 if failed else 0)
+          PY
       - name: Run browser API behavioral compatibility tests
         run: npm test

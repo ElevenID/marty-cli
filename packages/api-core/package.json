@@ -1,6 +1,6 @@
 {
   "name": "@elevenid/marty-api-core",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Rust/WASM HTTP client for browser and JavaScript Marty Identity Platform consumers",
   "type": "module",
   "main": "src/index.js",

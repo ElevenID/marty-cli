@@ -5,6 +5,7 @@
  * without hitting a real network (uses vi.fn mocks for fetch).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   MIP_VERSION,
   createApiClient,
@@ -16,6 +17,20 @@ import {
 } from '../src/index.js';
 
 describe('apiCore', () => {
+  it('ships browser-safe asynchronous WebAssembly initialization', () => {
+    const rootManifest = JSON.parse(
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
+    );
+    const generatedEntry = readFileSync(
+      new URL('../src/wasm/marty_api_client.js', import.meta.url),
+      'utf8',
+    );
+
+    expect(rootManifest.scripts['build:wasm']).toContain('wasm-bindgen --target web');
+    expect(generatedEntry).toContain('export { initSync, __wbg_init as default };');
+    expect(generatedEntry).not.toContain('import * as wasm from "./marty_api_client_bg.wasm"');
+  });
+
   it('exports the current Marty Protocol version', () => {
     expect(MIP_VERSION).toBe('0.5.0');
   });
