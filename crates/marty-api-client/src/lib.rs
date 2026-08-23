@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 
-pub const MIP_VERSION: &str = "0.4.1";
+pub const MIP_VERSION: &str = "0.5.0";
 
 const RETRYABLE_STATUSES: [StatusCode; 6] = [
     StatusCode::REQUEST_TIMEOUT,
