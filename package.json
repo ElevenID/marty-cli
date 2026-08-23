@@ -1,6 +1,6 @@
 {
   "name": "@elevenid/marty-cli",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Marty CLI — command-line client for the Marty Identity Platform",
   "type": "module",
   "publishConfig": {
@@ -38,12 +38,12 @@
     "node": ">=20"
   },
   "optionalDependencies": {
-    "@elevenid/marty-cli-darwin-arm64": "0.2.5",
-    "@elevenid/marty-cli-darwin-x64": "0.2.5",
-    "@elevenid/marty-cli-linux-arm64": "0.2.5",
-    "@elevenid/marty-cli-linux-x64": "0.2.5",
-    "@elevenid/marty-cli-win32-arm64": "0.2.5",
-    "@elevenid/marty-cli-win32-x64": "0.2.5"
+    "@elevenid/marty-cli-darwin-arm64": "0.2.6",
+    "@elevenid/marty-cli-darwin-x64": "0.2.6",
+    "@elevenid/marty-cli-linux-arm64": "0.2.6",
+    "@elevenid/marty-cli-linux-x64": "0.2.6",
+    "@elevenid/marty-cli-win32-arm64": "0.2.6",
+    "@elevenid/marty-cli-win32-x64": "0.2.6"
   },
   "devDependencies": {
     "vitest": "^4.1.10"

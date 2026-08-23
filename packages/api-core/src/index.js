@@ -18,7 +18,7 @@ import {
 
 const wasmUrl = new URL('./wasm/marty_api_client_bg.wasm', import.meta.url);
 const nodeFsPromises = ['node:fs', 'promises'].join('/');
-const wasmInput = typeof window === 'undefined' && globalThis.process?.versions?.node
+const wasmInput = globalThis.process?.versions?.node
   ? await import(/* @vite-ignore */ nodeFsPromises).then(({ readFile }) => readFile(wasmUrl))
   : wasmUrl;
 await initializeWasm({ module_or_path: wasmInput });
