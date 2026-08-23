@@ -3,7 +3,7 @@ members = ["crates/marty-api-client", "crates/marty-cli"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/ElevenID/marty-cli"
