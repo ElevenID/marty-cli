@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import {
   MIP_VERSION,
   createApiClient,
@@ -29,6 +30,15 @@ describe('apiCore', () => {
     expect(rootManifest.scripts['build:wasm']).toContain('wasm-bindgen --target web');
     expect(generatedEntry).toContain('export { initSync, __wbg_init as default };');
     expect(generatedEntry).not.toContain('import * as wasm from "./marty_api_client_bg.wasm"');
+  });
+
+  it('loads WebAssembly from the filesystem in Node runtimes that define window', () => {
+    const entryUrl = new URL('../src/index.js', import.meta.url).href;
+    execFileSync(process.execPath, [
+      '--input-type=module',
+      '--eval',
+      `globalThis.window = {}; const api = await import(${JSON.stringify(entryUrl)}); if (api.MIP_VERSION !== '0.5.0') process.exit(1);`,
+    ]);
   });
 
   it('exports the current Marty Protocol version', () => {
