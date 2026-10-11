@@ -105,6 +105,11 @@ jobs:
       - name: Build release evidence and npm packages
         shell: bash
         run: |
+          # npm pack does not inherit the repository license for workspace and
+          # platform subpackages. Ship the actual text with every tarball.
+          for package_dir in packages/api-core packages/cli-*; do
+            cp LICENSE "$package_dir/LICENSE"
+          done
           npm sbom --sbom-format cyclonedx > dist/marty-cli-sbom.cdx.json
           npm sbom --workspace @elevenid/marty-api-core --sbom-format cyclonedx > dist/marty-api-core-sbom.cdx.json
           npm pack --workspace @elevenid/marty-api-core --pack-destination dist
@@ -112,6 +117,9 @@ jobs:
             npm pack "./$package_dir" --pack-destination dist
           done
           npm pack --pack-destination dist
+          for package in dist/elevenid-marty-*.tgz; do
+            tar -tzf "$package" | grep -Fxq package/LICENSE
+          done
           cd dist
           sha256sum ./* > SHA256SUMS
       - name: Verify the packed npm launcher uses the native binary

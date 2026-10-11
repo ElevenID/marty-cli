@@ -15,6 +15,14 @@ Provides `createApiClient()` with:
 
 ## Usage
 
+The package is available as a release tarball, not through the npm registry.
+For a pinned consumer install, download and verify
+[`elevenid-marty-api-core-0.2.7.tgz`](https://github.com/ElevenID/marty-cli/releases/download/v0.2.7/elevenid-marty-api-core-0.2.7.tgz)
+against the release's
+[`SHA256SUMS`](https://github.com/ElevenID/marty-cli/releases/download/v0.2.7/SHA256SUMS),
+then install the local file with `npm install ./elevenid-marty-api-core-0.2.7.tgz`.
+The package name in imports remains `@elevenid/marty-api-core`.
+
 ```js
 import { MIP_VERSION, createApiClient, getErrorMessage } from '@elevenid/marty-api-core';
 
@@ -37,8 +45,8 @@ const orgs = await api.get('/v1/organizations');
 
 | Project | Auth Strategy | Install |
 |---------|--------------|---------|
-| `marty-ui` | Cookie (`credentials: 'include'`) | `npm install @elevenid/marty-api-core` |
-| `marty-integration-tests` | Session cookie / Bearer | `npm install @elevenid/marty-api-core` |
+| `marty-ui` | Cookie (`credentials: 'include'`) | Verified GitHub release tarball above |
+| `marty-integration-tests` | Session cookie / Bearer | Verified GitHub release tarball above |
 
 ## Building from source
 

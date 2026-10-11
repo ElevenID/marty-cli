@@ -14,14 +14,22 @@ The canonical implementation is the Rust workspace:
   contract used to prove behavior across implementation changes.
 
 GitHub releases contain native binaries for Linux, Windows, and macOS on x64
-and ARM64. The `@elevenid/marty-cli` npm package remains a supported install
-channel; its small `bin/marty.js` adapter only locates and starts the matching
-platform binary. It contains no CLI, protocol, authentication, or license logic.
+and ARM64. Download the binary for your platform from the
+[v0.2.7 release](https://github.com/ElevenID/marty-cli/releases/tag/v0.2.7)
+and verify it against the release's `SHA256SUMS` before running it. The
+`@elevenid/marty-cli` npm launcher is built and attached to that release, but
+is not currently published to npm. Its `bin/marty.js` adapter only locates and
+starts the matching platform binary; it contains no CLI, protocol,
+authentication, or license logic. The release tarball alone cannot install the
+launcher because its platform packages are likewise absent from npm.
 
 The `packages/api-core` package preserves the established JavaScript factory
 surface for browser consumers, but its HTTP behavior is implemented by the
 same Rust crate through WebAssembly. Its small adapter contains only method
-bindings and the legacy Axios-like `{ data }` response facade.
+bindings and the legacy Axios-like `{ data }` response facade. Install the
+published GitHub release tarball as described in
+[its package README](packages/api-core/README.md); the npm registry name is
+not currently available.
 
 ## Quick start
 
