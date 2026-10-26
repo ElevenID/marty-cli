@@ -16,14 +16,14 @@ Provides `createApiClient()` with:
 ## Usage
 
 The package is available as a release tarball, not through the npm registry.
-For a pinned v0.3.0 consumer install, download and verify
-[`elevenid-marty-api-core-0.3.0.tgz`](https://github.com/ElevenID/marty-cli/releases/download/v0.3.0/elevenid-marty-api-core-0.3.0.tgz)
+For a pinned v0.3.1 consumer install, download and verify
+[`elevenid-marty-api-core-0.3.1.tgz`](https://github.com/ElevenID/marty-cli/releases/download/v0.3.1/elevenid-marty-api-core-0.3.1.tgz)
 against the release's
-[`SHA256SUMS`](https://github.com/ElevenID/marty-cli/releases/download/v0.3.0/SHA256SUMS),
-then install the local file with `npm install ./elevenid-marty-api-core-0.3.0.tgz`.
+[`SHA256SUMS`](https://github.com/ElevenID/marty-cli/releases/download/v0.3.1/SHA256SUMS),
+then install the local file with `npm install ./elevenid-marty-api-core-0.3.1.tgz`.
 The package name in imports remains `@elevenid/marty-api-core`.
 
-Version v0.3.0 retains the established HTTP and JavaScript factory
+Version v0.3.1 retains the established HTTP and JavaScript factory
 behavior and MIP `0.5.0` header. The family version also covers the native CLI's
 new API-key commands; it is separate from the server API version. A version is
 installable only after its release artifacts and checksums are published. npm

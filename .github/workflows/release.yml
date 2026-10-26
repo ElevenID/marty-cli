@@ -140,7 +140,8 @@ jobs:
           done
           npm pack --pack-destination dist
           for package in dist/elevenid-marty-*.tgz; do
-            tar -tzf "$package" | grep -Fxq package/LICENSE
+            tar -tzf "$package" > "$RUNNER_TEMP/marty-package-files.txt"
+            grep -Fxq package/LICENSE "$RUNNER_TEMP/marty-package-files.txt"
           done
           cd dist
           sha256sum ./* > SHA256SUMS

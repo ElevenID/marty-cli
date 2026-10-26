@@ -51,7 +51,7 @@ marty orgs switch <org-id>
 | `marty init` | Interactive setup wizard |
 | `marty auth login` | Authenticate with an API key or OAuth2 client credentials |
 | `marty auth whoami` | Show current authentication status |
-| `marty api-keys` | List, create, and revoke organization API keys (first ships in v0.3.0) |
+| `marty api-keys` | List, create, and revoke organization API keys (first ships in v0.3.1) |
 | `marty health` | Check API health |
 | `marty orgs` | List, create, inspect, or switch organizations |
 | `marty credentials` | List, inspect, issue, verify, or revoke credentials |
@@ -81,10 +81,13 @@ and integration-test session cookies remain supported in the native client.
 
 ## Output and dry runs
 
-### API-key lifecycle (v0.3.0)
+### API-key lifecycle (v0.3.1)
 
-These commands first ship with v0.3.0; the earlier v0.2.7 binaries do not include
-them. They call the
+The first published release planned for these commands is v0.3.1; the earlier
+v0.2.7 binaries do not include them. The v0.3.0 tag is retained as a failed
+release attempt: its archive license check failed before any assets were
+published. Use v0.3.1 only after its release workflow has published and
+attested the downloads. They call the
 existing public gateway API and require an already provisioned operator
 credential. An organization-bound `admin:full` key may manage keys within its
 own organization; ordinary credential scopes cannot manage keys. Initial
