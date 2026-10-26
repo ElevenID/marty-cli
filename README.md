@@ -81,10 +81,10 @@ and integration-test session cookies remain supported in the native client.
 
 ## Output and dry runs
 
-### API-key lifecycle (v0.3.2)
+### API-key lifecycle (v0.3.3)
 
 These commands are available in v0.3.1 and later; v0.2.7 does not include them.
-The v0.3.0 tag remains a failed release attempt. v0.3.2 corrects the SDK SBOM
+The v0.3.0 and v0.3.2 tags remain failed release attempts; neither published assets. v0.3.3 corrects the SDK SBOM
 identity and adds Rust inventories for each native target and browser WASM;
 use its downloads only after that release is published and attested. They call the
 existing public gateway API and require an already provisioned operator
@@ -196,7 +196,7 @@ fail-closed invalid inputs.
 
 ## Release inventories
 
-Starting with v0.3.2, the release publishes these CycloneDX inventories alongside
+Starting with v0.3.3, the release publishes these CycloneDX inventories alongside
 its packages and binaries. SHA256SUMS and the release attestation cover each file.
 The npm registry remains an optional channel; these files accompany the GitHub
 release downloads.
@@ -226,3 +226,17 @@ and immediately before attestation/publication. Draft lookup requires verified
 push visibility and a complete paginated release listing. Publication uses a
 create-only command, with no update or asset-overwrite path. Corrections use a
 new version.
+
+
+Before tagging v0.3.3, run the manual `release-preflight.yml` workflow on accepted
+main with the existing unreleased v0.3.2 tag. Its write-scoped Actions installation
+token creates one uniquely marked, asset-free draft, proves that the guard detects
+that exact draft, and deletes only the unchanged owned draft. The existing tag is
+checked before and after; no assets or release are published. An interrupted or
+failed run retains a receipt with the owner nonce and any known draft ID for
+recovery. A changed/published/nonempty draft is preserved for inspection.
+
+The release jobs use explicit Actions write-token mode in their trusted workflow
+context. User-role `permissions.push` is not an installation-token scope check;
+standalone lookup keeps its user-role visibility check. The real Actions preflight
+must pass before the next version is tagged.
