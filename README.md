@@ -49,7 +49,7 @@ marty orgs switch <org-id>
 | Command | Description |
 |---------|-------------|
 | `marty init` | Interactive setup wizard |
-| `marty auth login` | Authenticate with an API key or OAuth2 client credentials |
+| `marty auth login` | Store an operator API key for the public gateway |
 | `marty auth whoami` | Show current authentication status |
 | `marty api-keys` | List, create, and revoke organization API keys (first ships in v0.3.1) |
 | `marty health` | Check API health |
@@ -59,7 +59,7 @@ marty orgs switch <org-id>
 | `marty verify` | Start, submit, evaluate, and inspect verification sessions |
 | `marty flows` | List, create, execute, inspect, and approve flows |
 | `marty templates` | List and inspect application templates |
-| `marty credential-templates` | Create, inspect, and publish credential templates |
+| `marty credential-templates` | Create, inspect, and activate credential templates |
 | `marty compliance` | Manage compliance profiles |
 | `marty trust` | Manage trust profiles |
 | `marty license` | Activate, inspect, validate, and install licenses |
@@ -72,12 +72,13 @@ Aliases from the previous CLI remain available: `apps`, `creds`, and `ct`.
 
 ```bash
 marty auth login --api-key <key>
-marty auth login --client-id <id> --client-secret <secret>
-marty auth login # guided interactive login
+marty auth login # choose API-key login in the guided flow
 ```
 
-`MARTY_API_KEY` overrides stored credentials. OAuth2 bearer tokens, API keys,
-and integration-test session cookies remain supported in the native client.
+`MARTY_API_KEY` overrides stored credentials. The Marty gateway accepts
+organization-bound API keys for machine access. The transport retains OAuth
+and integration-test session handling, but a client-credentials token is not
+accepted as a gateway machine credential and does not bootstrap an operator.
 
 ## Output and dry runs
 
@@ -249,8 +250,42 @@ Every successful observation must identify the exact owned draft. Other lookup
 errors fail immediately; the production absence guard is unchanged.
 
 
-This source prepares v0.3.4 with public SDK transport declarations and clean
-Node/browser TypeScript consumer gates. It retains MIP 0.5.0 and existing runtime
-behavior. Use that version only after its downloads and provenance are published.
+This source prepares v0.3.5 with corrected public organization/template setup
+commands. It retains the public SDK transport declarations introduced in v0.3.4,
+MIP 0.5.0 and the existing SDK runtime behavior. Use v0.3.5 only after its downloads
+and provenance are published and verified.
 See [the SDK guide](packages/api-core/README.md) for the typed contract and its
 response-validation limits.
+
+### Public organization and template setup (v0.3.5)
+
+Use an existing authenticated operator with the required tenant permissions.
+These commands do not create an unauthenticated initial operator. The API derives
+organization ownership from the authenticated actor; `--owner-id` is unsupported.
+
+```sh
+marty orgs create --name acme --display-name 'Acme'
+marty orgs switch ORGANIZATION_ID_FROM_RESPONSE
+marty ct create --name 'Employee badge' --credential-type EmployeeCredential \
+  --compliance-profile-id COMPLIANCE_PROFILE_ID \
+  --issuer-did did:web:issuer.example \
+  --vct https://issuer.example/credentials/employee
+marty ct activate TEMPLATE_ID_FROM_RESPONSE
+```
+
+The compliance profile and issuer identity must already exist and satisfy the
+server's creation/activation requirements. `--trust-profile-id` is optional.
+For an mdoc template, use `--format MDOC --doctype org.iso.18013.5.1.mDL` instead
+of the default SD-JWT format and its `--vct`. The selected format populates both
+the primary format and `supported_formats`, avoiding an unintended SD-JWT default.
+`--issuance-protocol` optionally selects the server-supported protocol.
+`--claims` accepts a JSON array of public claim definitions, for example
+`[{"name":"given_name","display":{"label":"Given name"}}]`.
+
+Template creation requires the public `--issuer-did`; custody selection and
+algorithms are resolved by the platform, so `--key-access-mode` and
+`--issuer-algorithm` are rejected. `publish` remains an alias for `activate` and
+uses `/activate`. The obsolete `--force` override is rejected; activation keeps
+the server's normal policy and artifact checks. Add `--dry-run` to inspect a
+request without sending it. Recognized formats and local HTTP tests do not
+qualify issuance, wallet interoperability or a full deployed headless lifecycle.
