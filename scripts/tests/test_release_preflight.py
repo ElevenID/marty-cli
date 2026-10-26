@@ -26,8 +26,9 @@ CONTEXT = {
 
 
 class DraftServer:
-    def __init__(self, *, hidden=False, changed=False, preexisting=False):
+    def __init__(self, *, hidden=False, changed=False, preexisting=False, delay=0):
         self.hidden, self.changed = hidden, changed
+        self.delay, self.observations = delay, 0
         self.created = self.deleted = 0
         self.draft = {"id": 99, "tag_name": "v0.3.2", "draft": True, "body": "user-owned"} if preexisting else None
 
@@ -48,7 +49,10 @@ class DraftServer:
             self.draft = {**value, "id": 101, "assets": []}
             value = self.draft
         elif method == "GET" and path.endswith("/releases"):
-            value = [self.draft] if self.draft and not (self.hidden and self.created) else []
+            if self.created:
+                self.observations += 1
+            unavailable = self.created and (self.hidden or self.observations <= self.delay)
+            value = [self.draft] if self.draft and not unavailable else []
         elif path.endswith("/releases/101"):
             if self.draft is None:
                 raise HTTPError(request.full_url, 404, "Not Found", {}, None)
@@ -88,10 +92,20 @@ class PreflightTests(unittest.TestCase):
                 guard.ensure_release_absent("ElevenID/marty-cli", "v0.3.2", "fixture-token",
                                             actions_write_token=True, opener=DraftServer())
 
-    def run_probe(self, server, receipt):
+    def run_probe(self, server, receipt, *, sleeper=lambda _: None):
         with patch.dict(os.environ, CONTEXT, clear=True):
             return probe.exercise("ElevenID/marty-cli", "v0.3.2", "a" * 40, "a" * 40,
-                                   "fixture-token", receipt, opener=server)
+                                   "fixture-token", receipt, opener=server, sleeper=sleeper)
+
+    def test_delayed_visibility_is_bounded_and_must_identify_the_owned_draft(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "receipt.json"
+            waits = []
+            record = self.run_probe(DraftServer(delay=2), path, sleeper=waits.append)
+            self.assertEqual(waits, [2, 2])
+            self.assertEqual(record["lookup_observations"][:2], [None, None])
+            self.assertEqual(record["lookup_observations"][2]["id"], record["fixture_id"])
+            self.assertEqual(record["result"], "passed")
 
     def test_owned_draft_is_detected_and_removed_without_ref_changes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -103,6 +117,29 @@ class PreflightTests(unittest.TestCase):
             self.assertEqual(record["result"], "passed")
             self.assertNotIn("fixture-token", path.read_text())
 
+    def test_foreign_identity_and_lookup_errors_fail_without_waiting(self):
+        for denied in (False, True):
+            with self.subTest(denied=denied), tempfile.TemporaryDirectory() as directory:
+                server = DraftServer()
+                path = Path(directory) / "receipt.json"
+                waits = []
+
+                def opener(request, timeout, *, server=server, denied=denied):
+                    if request.get_method() == "GET" and urlsplit(request.full_url).path.endswith("/releases") and server.created:
+                        if denied:
+                            raise HTTPError(request.full_url, 403, "Forbidden", {}, None)
+                        return io.BytesIO(json.dumps([{"id": 999, "tag_name": "v0.3.2", "draft": True}]).encode())
+                    return server(request, timeout)
+
+                with patch.dict(os.environ, CONTEXT, clear=True), self.assertRaises(RuntimeError):
+                    probe.exercise("ElevenID/marty-cli", "v0.3.2", "a" * 40, "a" * 40,
+                                   "fixture-token", path, opener=opener, sleeper=waits.append)
+                self.assertEqual(waits, [])
+                self.assertEqual((server.created, server.deleted), (1, 1))
+                record = json.loads(path.read_text())
+                self.assertFalse(record["draft_refused"])
+                self.assertEqual(record["failure_stage"], "observe_owned_draft")
+
     def test_hidden_draft_fails_preflight_and_still_cleans_owned_fixture(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "receipt.json"
@@ -110,7 +147,11 @@ class PreflightTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 self.run_probe(server, path)
             self.assertEqual((server.created, server.deleted), (1, 1))
-            self.assertFalse(json.loads(path.read_text())["draft_refused"])
+            record = json.loads(path.read_text())
+            self.assertFalse(record["draft_refused"])
+            self.assertEqual(record["lookup_observations"], [None] * 10)
+            self.assertEqual(record["failure_stage"], "observe_owned_draft")
+            self.assertEqual(record["failure_type"], "ValueError")
 
     def test_changed_or_preexisting_release_is_preserved(self):
         for options in ({"changed": True}, {"preexisting": True}):
