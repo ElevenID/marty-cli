@@ -81,6 +81,13 @@ jobs:
           cargo install cargo-cyclonedx --version 0.5.9 --locked
       - name: Build native CLI
         run: cargo build --package marty-cli --release --locked --target ${{ matrix.target }}
+      - name: Verify minimum Linux CA prerequisite handling
+        if: matrix.artifact == 'linux-x64'
+        shell: bash
+        run: |
+          python scripts/check_native_ca_prerequisite.py \
+            --binary "target/${{ matrix.target }}/release/${{ matrix.executable }}" \
+            --expected-version "${GITHUB_REF_NAME#v}"
       - name: Verify public setup with the actual release binary
         shell: bash
         run: |

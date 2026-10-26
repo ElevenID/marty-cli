@@ -2,6 +2,7 @@ mod commands;
 mod config;
 mod license;
 mod output;
+mod transport;
 
 use clap::Parser;
 

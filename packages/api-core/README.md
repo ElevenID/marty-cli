@@ -31,7 +31,7 @@ registry publishing is optional; GitHub release tarballs are the documented
 install channel.
 
 Public TypeScript declarations shipped in **v0.3.4**. This source prepares
-**v0.3.5** alongside the corrected native CLI setup commands, retaining the SDK
+**v0.3.6** alongside the native HTTP initialization correction, retaining the SDK
 transport contract and runtime behavior. Use the new tarball only after that
 version is published and verified. The package version and MIP `0.5.0` protocol
 version are separate.
@@ -63,11 +63,11 @@ const orgs = await api.get('/v1/organizations');
 
 ## TypeScript transport contract (since v0.3.4)
 
-After verifying and installing the v0.3.5 tarball, a Node ESM project can use
+After verifying and installing the v0.3.6 tarball, a Node ESM project can use
 TypeScript and Node 24 type definitions. The compiler gate uses these versions:
 
 ```sh
-npm install ./elevenid-marty-api-core-0.3.5.tgz
+npm install ./elevenid-marty-api-core-0.3.6.tgz
 npm install --save-dev typescript@7.0.2 @types/node@24.19.2
 ```
 
@@ -133,5 +133,5 @@ cargo install wasm-bindgen-cli --version 0.2.127 --locked
 npm run build:wasm
 npm test
 # After packing a local SDK archive, check isolated Node/browser type consumers:
-node scripts/check-packed-api-types.mjs path/to/elevenid-marty-api-core-0.3.5.tgz
+node scripts/check-packed-api-types.mjs path/to/elevenid-marty-api-core-0.3.6.tgz
 ```
