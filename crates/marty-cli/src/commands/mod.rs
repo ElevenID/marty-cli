@@ -1,5 +1,7 @@
 #![allow(clippy::large_enum_variant, clippy::too_many_lines)]
 
+mod api_keys;
+
 use std::io::IsTerminal;
 
 use anyhow::{Context, Result, bail};
@@ -37,6 +39,8 @@ pub struct Cli {
 enum Command {
     /// Manage authentication.
     Auth(AuthArgs),
+    /// Provision and retire organization-scoped machine API keys.
+    ApiKeys(api_keys::ApiKeysArgs),
     /// Check platform service health.
     Health(OutputArgs),
     /// Manage organizations.
@@ -581,6 +585,7 @@ pub async fn run(cli: Cli) -> Result<()> {
     let global_output = cli.global_output;
     match cli.command {
         Command::Auth(args) => run_auth(args, global_output).await,
+        Command::ApiKeys(args) => api_keys::run(args, global_output).await,
         Command::Health(mut args) => {
             apply_global(&mut args.output, global_output);
             run_health(args.output).await
@@ -2523,7 +2528,7 @@ async fn run_test(args: TestArgs, global: Option<OutputFormat>) -> Result<()> {
 }
 
 fn run_completion(shell: &str) -> Result<()> {
-    const COMMANDS: &str = "auth health orgs credentials applications verify flows templates credential-templates compliance trust config test init license completion";
+    const COMMANDS: &str = "auth api-keys health orgs credentials applications verify flows templates credential-templates compliance trust config test init license completion";
     match shell {
         "bash" => println!(
             r#"# marty bash completion

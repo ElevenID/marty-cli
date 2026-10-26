@@ -1,5 +1,37 @@
 [
   {
+    "name": "create explicitly scoped machine key",
+    "config": {"organizationId": "org-1"},
+    "args": ["api-keys", "create", "--name", "Reader", "--scope", "credentials:read,flows:read", "--is-test", "--dry-run"],
+    "stdout_contains": ["POST /v1/api-keys?organization_id=org-1", "\"credentials:read\"", "\"flows:read\"", "\"is_test\": true"]
+  },
+  {
+    "name": "key creation requires explicit scopes",
+    "config": {"organizationId": "org-1"},
+    "args": ["api-keys", "create", "--name", "Reader", "--dry-run"],
+    "exit_code": 2,
+    "stderr_contains": ["--scope"]
+  },
+  {
+    "name": "key creation rejects invalid expiry",
+    "config": {"organizationId": "org-1"},
+    "args": ["api-keys", "create", "--name", "Reader", "--scope", "credentials:read", "--expires-at", "tomorrow", "--dry-run"],
+    "exit_code": 2,
+    "stderr_contains": ["RFC 3339"]
+  },
+  {
+    "name": "key revocation uses explicit organization and escapes key identifier",
+    "config": {"organizationId": "org-old"},
+    "args": ["api-keys", "revoke", "key/1", "--organization-id", "org-new", "--dry-run"],
+    "stdout_contains": ["DELETE /v1/api-keys/key%2F1?organization_id=org-new"]
+  },
+  {
+    "name": "key management requires an organization",
+    "args": ["api-keys", "revoke", "key-1", "--dry-run"],
+    "exit_code": 1,
+    "stderr_contains": ["No active organization"]
+  },
+  {
     "name": "create organization",
     "args": ["orgs", "create", "--name", "Acme", "--owner-id", "owner-1", "--dry-run"],
     "stdout_contains": ["[dry-run] POST /v1/organizations", "\"display_name\": \"Acme\"", "\"visibility\": \"PRIVATE\""]

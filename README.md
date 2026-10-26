@@ -51,6 +51,7 @@ marty orgs switch <org-id>
 | `marty init` | Interactive setup wizard |
 | `marty auth login` | Authenticate with an API key or OAuth2 client credentials |
 | `marty auth whoami` | Show current authentication status |
+| `marty api-keys` | List, create, and revoke organization API keys (unreleased) |
 | `marty health` | Check API health |
 | `marty orgs` | List, create, inspect, or switch organizations |
 | `marty credentials` | List, inspect, issue, verify, or revoke credentials |
@@ -79,6 +80,42 @@ marty auth login # guided interactive login
 and integration-test session cookies remain supported in the native client.
 
 ## Output and dry runs
+
+### API-key lifecycle (unreleased)
+
+These commands are available in source builds after this change and require a
+new CLI release; the published v0.2.7 binaries do not include them. They call the
+existing public gateway API and require an already provisioned operator
+credential. An organization-bound `admin:full` key may manage keys within its
+own organization; ordinary credential scopes cannot manage keys. Initial
+operator/tenant bootstrap remains a separate installation step.
+
+With the operator key supplied privately in `MARTY_API_KEY`:
+
+```bash
+marty api-keys list --organization-id <org-id>
+marty api-keys create --organization-id <org-id> \
+  --name credential-reader --scope credentials:read \
+  --expires-at 2027-01-01T00:00:00Z
+marty api-keys revoke <key-id> --organization-id <org-id>
+```
+
+Creation requires explicit `--scope` flags; repeat the flag or use comma-separated
+scopes. The new secret appears once in the JSON output's `key` field. Capture it
+privately rather than into shared build logs. The command does not save the new
+key as the operator's login. `--is-test` creates a test-prefixed key without
+selecting a sandbox server. Organization selection defaults to the active
+organization; an explicit override does not change saved configuration.
+
+Create and revoke support `--dry-run`. List supports `--limit` (0 through 500)
+and `--offset`. All three commands default to JSON and honor `--global-output`.
+
+The current Marty gateway accepts organization API keys as machine credentials.
+Obtaining an OAuth client-credentials token with this CLI does not establish
+that the configured gateway accepts that token; generic OAuth bearer validation
+is not currently supported by the Marty gateway.
+
+### General output
 
 Commands support table, pretty JSON, and compact JSON output. Mutation commands
 support `--dry-run` and print the exact HTTP action and JSON payload without
