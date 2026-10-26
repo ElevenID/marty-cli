@@ -66,11 +66,15 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
       - name: Install the pinned Rust toolchain
         shell: bash
         run: |
           rustup toolchain install 1.93.0 --profile minimal --target '${{ matrix.target }}'
           rustup default 1.93.0
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
       - name: Build native CLI
         run: cargo build --package marty-cli --release --locked --target ${{ matrix.target }}
       - name: Verify the actual native release entry point
@@ -80,10 +84,15 @@ jobs:
           binary="target/${{ matrix.target }}/release/${{ matrix.executable }}"
           test "$("$binary" --version)" = "${GITHUB_REF_NAME#v}"
           "$binary" api-keys create --help
+      - name: Inventory the actual native build on its build host
+        shell: bash
+        run: |
+          python scripts/generate_release_sboms.py --rust-only --targets '${{ matrix.artifact }}' --output native-dist
+          cp 'target/${{ matrix.target }}/release/${{ matrix.executable }}' 'native-dist/${{ matrix.executable }}'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-${{ matrix.artifact }}
-          path: target/${{ matrix.target }}/release/${{ matrix.executable }}
+          path: native-dist/*
           if-no-files-found: error
           retention-days: 7
 
@@ -136,6 +145,9 @@ jobs:
             cp "native/native-$target/marty.exe" "packages/cli-$target/bin/marty.exe"
             cp "native/native-$target/marty.exe" "dist/marty-$target.exe"
           done
+          for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+            cp "native/native-$target/marty-cli-$target-rust-sbom.cdx.json" dist/
+          done
       - run: npm ci
       - run: npm run build:wasm
       - run: npm test
@@ -147,7 +159,7 @@ jobs:
           for package_dir in packages/api-core packages/cli-*; do
             cp LICENSE "$package_dir/LICENSE"
           done
-          python scripts/generate_release_sboms.py --output dist
+          python scripts/generate_release_sboms.py --targets wasm --require-all --output dist
           npm pack --workspace @elevenid/marty-api-core --pack-destination dist
           for package_dir in packages/cli-*; do
             npm pack "./$package_dir" --pack-destination dist

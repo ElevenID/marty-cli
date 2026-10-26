@@ -210,9 +210,12 @@ release downloads.
 | `marty-api-client-wasm-rust-sbom.cdx.json` | Resolved production Rust graph for `wasm32-unknown-unknown` |
 
 The producer uses pinned [cargo-cyclonedx 0.5.9](https://github.com/CycloneDX/cyclonedx-rust-cargo/blob/cargo-cyclonedx-0.5.9/cargo-cyclonedx/README.md).
-It checks every Rust component, normal/build dependency edge and registry checksum
-against Cargo's target-filtered metadata and the unchanged lockfile. Development
-dependencies are excluded. The npm roots must identify their actual package and
+Each native build runner generates its Rust inventory alongside its binary; the
+WASM packaging runner generates the browser inventory. The producer checks the
+component metadata and registry checksums against Cargo metadata and the unchanged
+lockfile, then uses each package's normal/build Cargo tree for the production
+components and edges. This excludes development/workspace feature extras. The
+recorded build host also binds the build-dependency context. The npm roots must identify their actual package and
 version. OS libraries, remote services and KMS deployments have separate inventories.
 
 v0.3.1's SDK SBOM incorrectly identifies the CLI root and omits the SDK component;

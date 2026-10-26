@@ -30,6 +30,7 @@ jobs:
         run: |
           rustup toolchain install 1.93.0 --profile minimal --component clippy,rustfmt
           rustup default 1.93.0
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
       - name: Install browser-package dependencies
         run: npm ci
       - name: Check formatting
@@ -40,6 +41,8 @@ jobs:
         run: cargo test --workspace --locked
       - name: Test release inventory and overwrite refusal controls
         run: python -m unittest discover -s scripts/tests
+      - name: Exercise the native build dependency inventory
+        run: python scripts/generate_release_sboms.py --host-native --rust-only --output artifacts/native-sbom-smoke
       - name: Run the browser API compatibility suite
         run: npm test
 
@@ -75,7 +78,7 @@ jobs:
           cargo install cargo-cyclonedx --version 0.5.9 --locked
       - run: npm ci
       - name: Exercise real package and Rust inventory generation
-        run: python scripts/generate_release_sboms.py --output artifacts/source-sbom-smoke
+        run: python scripts/generate_release_sboms.py --targets wasm --output artifacts/source-sbom-smoke
       - name: Lint the browser target
         run: cargo clippy --package marty-api-client --target wasm32-unknown-unknown -- -D warnings
       - name: Rebuild the Rust/WASM package

@@ -7,6 +7,7 @@ import argparse
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import tomllib
@@ -43,7 +44,8 @@ def npm_identity(bom: dict, package: str, version: str) -> None:
 
 
 def rust_graph(bom: dict, metadata: dict, package: str, target: str, version: str,
-               checksums: dict[tuple[str, str], str]) -> None:
+               checksums: dict[tuple[str, str], str],
+               selected: dict[str, set[str]] | None = None) -> None:
     packages = {item["id"]: item for item in metadata["packages"]}
     roots = [item for item in packages.values() if item["name"] == package
              and item["version"] == version and item["id"] in metadata["workspace_members"]]
@@ -56,12 +58,19 @@ def rust_graph(bom: dict, metadata: dict, package: str, target: str, version: st
                    if any(kind["kind"] != "dev" for kind in dep["dep_kinds"])}
         for identity, item in nodes.items()
     }
+    if selected is not None:
+        if root not in selected or any(identity not in production or not peers <= production[identity]
+                                       for identity, peers in selected.items()):
+            raise ValueError("Selected build tree differs from Cargo metadata")
+        production = selected
     closure, pending = {root}, [root]
     while pending:
         for identity in production[pending.pop()]:
             if identity not in closure:
                 closure.add(identity)
                 pending.append(identity)
+    if selected is not None and closure != set(selected):
+        raise ValueError("Selected build tree contains disconnected dependencies")
     component = bom.get("metadata", {}).get("component", {})
     properties = bom.get("metadata", {}).get("properties", [])
     if (bom.get("bomFormat") != "CycloneDX" or component.get("bom-ref") != root
@@ -85,18 +94,42 @@ def rust_graph(bom: dict, metadata: dict, package: str, target: str, version: st
                 raise ValueError("Rust SBOM registry checksum differs from Cargo.lock")
 
 
+def production_tree(text: str, metadata: dict, package: str, version: str) -> dict[str, set[str]]:
+    """Read package-selected Cargo normal/build edges without dev feature unification."""
+    identities = {}
+    for item in metadata["packages"]:
+        identities.setdefault((item["name"], item["version"]), []).append(item["id"])
+    graph, stack = {}, []
+    for line in text.splitlines():
+        if not line.strip() or line.strip() == "[build-dependencies]":
+            continue
+        match = re.fullmatch(r"([0-9]+)(\S+) v(\S+)(?: .*)?", line)
+        if match is None:
+            raise ValueError("Cargo production tree has an unknown line")
+        depth, name, release = int(match[1]), match[2], match[3]
+        candidates = identities.get((name, release), [])
+        if len(candidates) != 1 or depth > len(stack):
+            raise ValueError("Cargo production tree has ambiguous identity or depth")
+        identity = candidates[0]
+        if not stack and (depth != 0 or (name, release) != (package, version)):
+            raise ValueError("Cargo production tree starts with the wrong package")
+        if stack and depth == 0:
+            raise ValueError("Cargo production tree has more than one root")
+        graph.setdefault(identity, set())
+        if depth:
+            graph[stack[depth - 1]].add(identity)
+        stack = stack[:depth] + [identity]
+    if not graph:
+        raise ValueError("Cargo production tree is empty")
+    return graph
+
+
 def write(output: Path, name: str, document: dict) -> None:
     with (output / name).open("x", encoding="utf-8") as stream:
         stream.write(json.dumps(document, indent=2) + "\n")
 
 
-def generate(output: Path, cyclonedx: str, targets: list[str]) -> None:
-    output.mkdir(parents=True, exist_ok=True)
-    version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
-    lock = (ROOT / "Cargo.lock").read_bytes()
-    checksums = {(item["name"], item["version"]): item["checksum"]
-                 for item in tomllib.loads(lock.decode("utf-8"))["package"] if "checksum" in item}
-    prefix = "marty-sbom-" + uuid4().hex
+def npm_inventories(version: str) -> tuple[dict, dict]:
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
     if not npm:
         raise ValueError("npm is required for release inventories")
@@ -118,6 +151,36 @@ def generate(output: Path, cyclonedx: str, targets: list[str]) -> None:
         bom["metadata"]["component"]["name"] = manifest["name"].rsplit("/", 1)[-1]
         npm_identity(bom, manifest["name"], version)
         inventory[name] = bom
+    return inventory, manifests
+
+
+def host_target() -> str:
+    matches = re.findall(r"^host: (\S+)$", run(["rustc", "-vV"]), re.MULTILINE)
+    if len(matches) != 1:
+        raise ValueError("Rust build host identity is absent")
+    return matches[0]
+
+
+def require_build_inventory(bom: dict, package: str, target: str, version: str) -> None:
+    component = bom.get("metadata", {}).get("component", {})
+    properties = bom.get("metadata", {}).get("properties", [])
+    if (bom.get("bomFormat") != "CycloneDX" or component.get("name") != package
+            or component.get("version") != version
+            or {"name": "cdx:rustc:sbom:target:triple", "value": target} not in properties
+            or not any(item.get("name") == "marty:build:host" and item.get("value")
+                       for item in properties)):
+        raise ValueError("Native build job inventory has the wrong package, version or target")
+
+
+def generate(output: Path, cyclonedx: str, targets: list[str], *, rust_only: bool = False,
+             require_all: bool = False) -> None:
+    output.mkdir(parents=True, exist_ok=True)
+    version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+    lock = (ROOT / "Cargo.lock").read_bytes()
+    checksums = {(item["name"], item["version"]): item["checksum"]
+                 for item in tomllib.loads(lock.decode("utf-8"))["package"] if "checksum" in item}
+    prefix = "marty-sbom-" + uuid4().hex
+    inventory, manifests = ({}, {}) if rust_only else npm_inventories(version)
     base_url = f"https://github.com/ElevenID/marty-cli/releases/download/v{version}/"
     for alias in targets:
         target = TARGETS[alias]
@@ -134,19 +197,43 @@ def generate(output: Path, cyclonedx: str, targets: list[str]) -> None:
             source = ROOT / f"crates/{package}/{prefix}_{target}.cdx.json"
             bom = json.loads(source.read_text(encoding="utf-8"))
             rust_graph(bom, metadata, package, target, version, checksums)
+            selected = production_tree(run([
+                "cargo", "tree", "--locked", "--color", "never", "--package", package,
+                "--target", target, "--edges", "normal,build", "--prefix", "depth",
+                "--format", "{p}", "--no-dedupe", "--charset", "ascii",
+            ]), metadata, package, version)
+            # Cargo metadata resolves workspace/dev features together. The
+            # package-selected tree is the build's production graph. Retain
+            # the generator's checked component metadata for precisely that set.
+            bom["components"] = [item for item in bom["components"] if item["bom-ref"] in selected]
+            bom["dependencies"] = [{"ref": identity, "dependsOn": sorted(peers)}
+                                   for identity, peers in sorted(selected.items())]
+            rust_graph(bom, metadata, package, target, version, checksums, selected)
+            bom["metadata"]["properties"].append({"name": "marty:build:host", "value": host_target()})
             if (ROOT / "Cargo.lock").read_bytes() != lock:
                 raise ValueError("SBOM generation changed the release dependency lock")
             filename = f"{package}-{alias}-rust-sbom.cdx.json"
             write(output, filename, bom)
-            owner = "marty-api-core" if alias == "wasm" else f"marty-cli-{alias}"
-            inventory[owner]["metadata"]["component"].setdefault("externalReferences", []).append(
-                {"type": "bom", "url": base_url + filename})
         finally:
             for path in generated:
                 if not path.resolve().is_relative_to(ROOT) or path.is_symlink():
                     raise ValueError("SBOM temporary output escaped the source workspace")
                 if path.is_file():
                     path.unlink()
+    if rust_only:
+        if (ROOT / "Cargo.lock").read_bytes() != lock:
+            raise ValueError("SBOM generation changed the release dependency lock")
+        print(f"Validated {len(targets)} Rust build target graphs")
+        return
+    for alias, target in TARGETS.items():
+        package = "marty-api-client" if alias == "wasm" else "marty-cli"
+        filename = f"{package}-{alias}-rust-sbom.cdx.json"
+        if require_all:
+            bom = json.loads((output / filename).read_text(encoding="utf-8"))
+            require_build_inventory(bom, package, target, version)
+        owner = "marty-api-core" if alias == "wasm" else f"marty-cli-{alias}"
+        inventory[owner]["metadata"]["component"].setdefault("externalReferences", []).append(
+            {"type": "bom", "url": base_url + filename})
     # The launcher declares six optional native packages. Preserve that family
     # inventory even when npm cannot install unpublished optional registry names.
     launcher = inventory["marty-cli"]
@@ -187,6 +274,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cyclonedx", default="cargo-cyclonedx")
-    parser.add_argument("--targets", nargs="+", choices=TARGETS, default=list(TARGETS))
+    parser.add_argument("--targets", nargs="+", choices=TARGETS, default=[])
+    parser.add_argument("--host-native", action="store_true")
+    parser.add_argument("--rust-only", action="store_true")
+    parser.add_argument("--require-all", action="store_true")
     args = parser.parse_args()
-    generate(args.output.resolve(), args.cyclonedx, args.targets)
+    if args.host_native:
+        aliases = [name for name, triple in TARGETS.items() if triple == host_target()]
+        if len(aliases) != 1:
+            raise ValueError("Rust host is not a supported native build target")
+        args.targets.extend(aliases)
+    if not args.targets or len(set(args.targets)) != len(args.targets):
+        raise ValueError("Select unique Rust build targets")
+    generate(args.output.resolve(), args.cyclonedx, args.targets,
+             rust_only=args.rust_only, require_all=args.require_all)
