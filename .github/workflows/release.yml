@@ -8,7 +8,22 @@ permissions:
   contents: read
 
 jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require source integrated into main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
   build-native:
+    needs: verify-source
     strategy:
       fail-fast: false
       matrix:
@@ -47,6 +62,13 @@ jobs:
           rustup default 1.93.0
       - name: Build native CLI
         run: cargo build --package marty-cli --release --locked --target ${{ matrix.target }}
+      - name: Verify the actual native release entry point
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="target/${{ matrix.target }}/release/${{ matrix.executable }}"
+          test "$("$binary" --version)" = "${GITHUB_REF_NAME#v}"
+          "$binary" api-keys create --help
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-${{ matrix.artifact }}
@@ -128,8 +150,11 @@ jobs:
           npm install \
             --prefix "$RUNNER_TEMP/marty-cli-release-smoke" \
             ./dist/elevenid-marty-cli-linux-x64-*.tgz \
+            ./dist/elevenid-marty-api-core-*.tgz \
             ./dist/elevenid-marty-cli-[0-9]*.tgz
-          "$RUNNER_TEMP/marty-cli-release-smoke/node_modules/.bin/marty" --version
+          test "$("$RUNNER_TEMP/marty-cli-release-smoke/node_modules/.bin/marty" --version)" = "${GITHUB_REF_NAME#v}"
+          "$RUNNER_TEMP/marty-cli-release-smoke/node_modules/.bin/marty" api-keys create --help
+          node scripts/check-packed-api-client.mjs "$RUNNER_TEMP/marty-cli-release-smoke" "${GITHUB_REF_NAME#v}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: marty-cli-release
