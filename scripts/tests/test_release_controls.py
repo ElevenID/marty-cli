@@ -115,19 +115,48 @@ class ReleaseTests(unittest.TestCase):
     def lookup(self, status):
         def opener(request, timeout):
             self.assertEqual(timeout, 30)
-            self.assertIn("api.github.com/repos/ElevenID/marty-cli/releases/tags/v0.3.2", request.full_url)
+            self.assertIn("api.github.com/repos/ElevenID/marty-cli", request.full_url)
             raise HTTPError(request.full_url, status, "fixture", {}, None)
         return opener
 
-    def test_only_not_found_proves_absence(self):
-        releases.ensure_release_absent("ElevenID/marty-cli", "v0.3.2", "fixture-token", opener=self.lookup(404))
-        for status in (401, 403, 429, 500):
+    def test_tag_not_found_does_not_prove_draft_absence(self):
+        for status in (404, 401, 403, 429, 500):
             with self.subTest(status=status), self.assertRaises(releases.ReleaseLookupError):
                 releases.ensure_release_absent("ElevenID/marty-cli", "v0.3.2", "fixture-token", opener=self.lookup(status))
 
-    def test_draft_and_published_releases_both_refuse_overwrite(self):
-        for draft in (True, False):
-            payload = json.dumps({"tag_name": "v0.3.2", "draft": draft}).encode()
-            with self.subTest(draft=draft), self.assertRaises(releases.ReleaseAlreadyExistsError):
+    def test_published_release_refuses_overwrite(self):
+        payload = json.dumps({"tag_name": "v0.3.2", "draft": False}).encode()
+        with self.assertRaises(releases.ReleaseAlreadyExistsError):
+            releases.ensure_release_absent("ElevenID/marty-cli", "v0.3.2", "fixture-token",
+                                           opener=lambda *args, **kwargs: io.BytesIO(payload))
+
+    def paginated(self, *, draft=False, push=True, invalid=False):
+        def opener(request, timeout):
+            self.assertEqual(timeout, 30)
+            if "/releases/tags/" in request.full_url:
+                raise HTTPError(request.full_url, 404, "Not Found", {}, None)
+            if request.full_url.endswith("/marty-cli"):
+                payload = {"permissions": {"push": push}}
+            elif request.full_url.endswith("page=1"):
+                payload = [{"tag_name": f"older-{i}", "draft": False} for i in range(100)]
+            elif request.full_url.endswith("page=2"):
+                payload = ["malformed"] if invalid else [{"tag_name": "v0.3.2", "draft": True}] if draft else []
+            else:
+                self.fail("Unexpected release lookup URL")
+            return io.BytesIO(json.dumps(payload).encode())
+        return opener
+
+    def test_draft_on_later_page_refuses_overwrite(self):
+        with self.assertRaises(releases.ReleaseAlreadyExistsError):
+            releases.ensure_release_absent("ElevenID/marty-cli", "v0.3.2", "fixture-token",
+                                           opener=self.paginated(draft=True))
+
+    def test_visible_exhausted_history_proves_absence(self):
+        releases.ensure_release_absent("ElevenID/marty-cli", "v0.3.2", "fixture-token",
+                                       opener=self.paginated())
+
+    def test_hidden_drafts_and_malformed_history_fail_closed(self):
+        for options in ({"push": False}, {"invalid": True}):
+            with self.subTest(options=options), self.assertRaises(releases.ReleaseLookupError):
                 releases.ensure_release_absent("ElevenID/marty-cli", "v0.3.2", "fixture-token",
-                                               opener=lambda *args, payload=payload, **kwargs: io.BytesIO(payload))
+                                               opener=self.paginated(**options))

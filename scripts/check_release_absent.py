@@ -44,20 +44,44 @@ def load_release(
 ) -> dict[str, Any] | None:
     if not token:
         raise ReleaseLookupError("GH_TOKEN is required")
-    request = Request(
-        release_url(repository, tag),
-        headers={
+    tagged_url = release_url(repository, tag)
+    repository_url = tagged_url.split("/releases/tags/", 1)[0]
+
+    def get(url: str) -> Any:
+        request = Request(url, headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": API_VERSION,
-        },
-    )
-    try:
+        })
         with opener(request, timeout=30) as response:
-            payload = json.load(response)
+            return json.load(response)
+
+    try:
+        try:
+            payload = get(tagged_url)
+        except HTTPError as error:
+            if error.code != 404:
+                raise
+            # Tag lookup is documented for published releases. Drafts require
+            # a paginated listing and an identity able to see draft releases.
+            identity = get(repository_url)
+            permissions = identity.get("permissions") if isinstance(identity, dict) else None
+            if not isinstance(permissions, dict) or permissions.get("push") is not True:
+                raise ReleaseLookupError("Push visibility is required to exclude draft releases")
+            for page in range(1, 101):
+                items = get(f"{repository_url}/releases?per_page=100&page={page}")
+                if not isinstance(items, list) or len(items) > 100:
+                    raise ReleaseLookupError("GitHub release listing is invalid")
+                for item in items:
+                    if (not isinstance(item, dict) or not isinstance(item.get("tag_name"), str)
+                            or not isinstance(item.get("draft"), bool)):
+                        raise ReleaseLookupError("GitHub release listing is invalid")
+                    if item["tag_name"] == tag:
+                        return item
+                if len(items) < 100:
+                    return None
+            raise ReleaseLookupError("GitHub release listing exceeded the lookup bound")
     except HTTPError as error:
-        if error.code == 404:
-            return None
         raise ReleaseLookupError(f"GitHub release lookup failed with HTTP {error.code}") from error
     except (OSError, ValueError, json.JSONDecodeError) as error:
         raise ReleaseLookupError("GitHub release lookup returned an invalid response") from error

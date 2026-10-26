@@ -222,4 +222,7 @@ v0.3.1's SDK SBOM incorrectly identifies the CLI root and omits the SDK componen
 its checksum and provenance verify those published bytes but do not correct that
 inventory. Those assets and tags remain unchanged. The normal release workflow
 serializes each tag and refuses existing draft or published releases before builds
-and immediately before attestation/publication. Corrections use a new version.
+and immediately before attestation/publication. Draft lookup requires verified
+push visibility and a complete paginated release listing. Publication uses a
+create-only command, with no update or asset-overwrite path. Corrections use a
+new version.
