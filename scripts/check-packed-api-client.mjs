@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -45,12 +48,29 @@ try {
   assert.deepEqual(result, [{ id: 'packaged-client-fixture' }]);
   const wrapped = await client.apiClient.get('/v1/organizations');
   assert.deepEqual(wrapped.data, result);
+  const readme = await readFile(resolve(dirname(entry), '..', 'README.md'), 'utf8');
+  const examples = [...readme.matchAll(/```js\r?\n([\s\S]*?)```/g)]
+    .map(match => match[1]).filter(code => code.includes('process.env.MARTY_API_KEY'));
+  assert.equal(examples.length, 1, 'Run the installed SDK documented Node example');
+  const example = resolve(installation, `.marty-sdk-example-${randomUUID()}.mjs`);
+  await writeFile(example, examples[0], { flag: 'wx' });
+  try {
+    const env = { ...process.env, MARTY_API_URL: `http://127.0.0.1:${server.address().port}`,
+      MARTY_API_KEY: 'mk_test_packaged-fixture' };
+    await promisify(execFile)(process.execPath, [example], { env, timeout: 30_000 });
+    await assert.rejects(promisify(execFile)(process.execPath, [example], {
+      env: { ...env, MARTY_API_KEY: '' }, timeout: 30_000,
+    }), error => error.stderr.includes('MARTY_API_KEY is required'));
+  } finally {
+    assert.equal(await readFile(example, 'utf8'), examples[0], 'Preserve a changed documentation fixture');
+    await unlink(example);
+  }
   const expectedRequest = {
     path: '/v1/organizations', method: 'GET', key: 'mk_test_packaged-fixture',
     protocol: '0.5.0', cookie: undefined,
   };
-  assert.deepEqual(requests, [expectedRequest, expectedRequest]);
-  console.log('Packed SDK version, WASM import and HTTP header contract passed');
+  assert.deepEqual(requests, [expectedRequest, expectedRequest, expectedRequest]);
+  console.log('Packed SDK version, WASM import, HTTP headers and executable Node documentation passed');
 } finally {
   clearTimeout(deadline);
   server.closeAllConnections();

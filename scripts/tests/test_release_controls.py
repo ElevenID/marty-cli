@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import io
 import json
+import sys
 import unittest
 from pathlib import Path
 from urllib.error import HTTPError
@@ -21,6 +22,11 @@ releases = module("check_release_absent")
 
 
 class InventoryTests(unittest.TestCase):
+    def test_inventory_tool_output_preserves_utf8_independently_of_windows_locale(self):
+        value = "Curly quotes \u201cmetadata\u201d and caf\u00e9"
+        command = "import sys; sys.stdout.buffer.write(" + repr(value.encode("utf-8")) + ")"
+        self.assertEqual(sboms.run([sys.executable, "-c", command]), value)
+
     def test_final_package_requires_bound_build_inventory(self):
         bom = {"bomFormat": "CycloneDX", "metadata": {"component": {
             "name": "marty-cli", "version": "0.3.2"}, "properties": [
