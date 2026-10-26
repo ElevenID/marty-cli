@@ -269,7 +269,8 @@ marty orgs switch ORGANIZATION_ID_FROM_RESPONSE
 marty ct create --name 'Employee badge' --credential-type EmployeeCredential \
   --compliance-profile-id COMPLIANCE_PROFILE_ID \
   --issuer-did did:web:issuer.example \
-  --vct https://issuer.example/credentials/employee
+  --vct https://issuer.example/credentials/employee \
+  --claims '[{"name":"given_name","display":{"label":"Given name"}}]'
 marty ct activate TEMPLATE_ID_FROM_RESPONSE
 ```
 
@@ -279,7 +280,7 @@ For an mdoc template, use `--format MDOC --doctype org.iso.18013.5.1.mDL` instea
 of the default SD-JWT format and its `--vct`. The selected format populates both
 the primary format and `supported_formats`, avoiding an unintended SD-JWT default.
 `--issuance-protocol` optionally selects the server-supported protocol.
-`--claims` accepts a JSON array of public claim definitions, for example
+`--claims` is required and accepts a nonempty JSON array of public claim definitions, for example
 `[{"name":"given_name","display":{"label":"Given name"}}]`.
 
 Template creation requires the public `--issuer-did`; custody selection and

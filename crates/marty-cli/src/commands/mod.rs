@@ -445,7 +445,7 @@ enum CredentialTemplatesCommand {
         #[arg(long)]
         doctype: Option<String>,
         #[arg(long)]
-        claims: Option<String>,
+        claims: String,
         #[arg(long)]
         issuer_did: String,
         #[arg(long)]
@@ -1996,11 +1996,9 @@ async fn run_credential_templates(
             {
                 bail!("--doctype is required for MDOC and ZK_MDOC templates");
             }
-            let claims = claims
-                .map(|value| parse_json(&value, "--claims"))
-                .transpose()?;
-            if claims.as_ref().is_some_and(|value| !value.is_array()) {
-                bail!("--claims must be a JSON array");
+            let claims = parse_json(&claims, "--claims")?;
+            if claims.as_array().is_none_or(Vec::is_empty) {
+                bail!("--claims must be a nonempty JSON array");
             }
             let body = json_object([
                 ("organization_id", Some(json!(require_org(&config)?))),
@@ -2015,7 +2013,7 @@ async fn run_credential_templates(
                 ("doctype", doctype.map(Value::String)),
                 ("issuer_did", Some(json!(issuer_did))),
                 ("issuance_protocol", issuance_protocol.map(Value::String)),
-                ("claims", claims),
+                ("claims", Some(claims)),
             ]);
             if !dry_run(is_dry, "POST /v1/credential-templates", Some(&body))? {
                 print_value(

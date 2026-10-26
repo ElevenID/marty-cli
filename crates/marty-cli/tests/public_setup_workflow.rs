@@ -7,6 +7,8 @@ use wiremock::{
     matchers::{body_json, header, method, path},
 };
 
+const CLAIMS: &str = r#"[{"name":"given_name","display":{"label":"Given name"}}]"#;
+
 fn command(config: &Path, api_url: &str) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_marty"));
     command
@@ -83,6 +85,7 @@ async fn template_creation_sends_public_identity_and_consistent_formats() {
             "compliance_profile_id":"profile-1", "trust_profile_id":"trust-1",
             "credential_payload_format":"SD_JWT_VC", "supported_formats":["SD_JWT_VC"],
             "privacy_posture":"selective_disclosure", "vct":"https://issuer.example/employee",
+            "claims":[{"name":"given_name","display":{"label":"Given name"}}],
             "issuer_did":"did:web:issuer.example"
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"template-1", "status":"draft"})))
@@ -108,6 +111,8 @@ async fn template_creation_sends_public_identity_and_consistent_formats() {
                 "did:web:issuer.example",
                 "--vct",
                 "https://issuer.example/employee",
+                "--claims",
+                CLAIMS,
                 "-o",
                 "json"
             ]
@@ -168,6 +173,7 @@ async fn mdoc_template_uses_explicit_doctype_without_unintended_sd_jwt_defaults(
             "organization_id":"org-selected", "name":"Mobile document", "credential_type":"MobileDocument",
             "compliance_profile_id":"profile-1", "credential_payload_format":"MDOC", "supported_formats":["MDOC"],
             "privacy_posture":"selective_disclosure", "doctype":"org.iso.18013.5.1.mDL",
+            "claims":[{"name":"given_name","display":{"label":"Given name"}}],
             "issuer_did":"did:web:issuer.example", "issuance_protocol":"OID4VCI_PRE_AUTH"
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id":"mdoc-template"})))
@@ -195,6 +201,8 @@ async fn mdoc_template_uses_explicit_doctype_without_unintended_sd_jwt_defaults(
                 "org.iso.18013.5.1.mDL",
                 "--issuance-protocol",
                 "OID4VCI_PRE_AUTH",
+                "--claims",
+                CLAIMS,
                 "-o",
                 "json"
             ]
@@ -220,6 +228,8 @@ async fn unsupported_overrides_and_missing_public_inputs_fail_before_http() {
         "did:web:issuer.example",
         "--vct",
         "https://issuer.example/employee",
+        "--claims",
+        CLAIMS,
     ];
     let mut cases = vec![
         (
@@ -227,13 +237,21 @@ async fn unsupported_overrides_and_missing_public_inputs_fail_before_http() {
             "--owner-id",
         ),
         (vec!["ct", "publish", "template-1", "--force"], "--force"),
-        (base[..8].to_vec(), "--issuer-did"),
-        (base[..10].to_vec(), "--vct"),
+        ([&base[..8], &["--claims", CLAIMS]].concat(), "--issuer-did"),
+        ([&base[..10], &["--claims", CLAIMS]].concat(), "--vct"),
+        (base[..12].to_vec(), "--claims"),
     ];
     for (extra, message) in [
         (vec!["--key-access-mode", "key_vault"], "--key-access-mode"),
         (vec!["--issuer-algorithm", "ES256"], "--issuer-algorithm"),
-        (vec!["--claims", "{}"], "--claims must be a JSON array"),
+        (
+            vec!["--claims", "{}"],
+            "--claims must be a nonempty JSON array",
+        ),
+        (
+            vec!["--claims", "[]"],
+            "--claims must be a nonempty JSON array",
+        ),
         (
             vec!["--format", "unsupported"],
             "Unsupported template --format",
@@ -241,6 +259,9 @@ async fn unsupported_overrides_and_missing_public_inputs_fail_before_http() {
         (vec!["--format", "MDOC"], "--doctype is required"),
     ] {
         let mut args = base.to_vec();
+        if extra.first() == Some(&"--claims") {
+            args.truncate(args.len() - 2);
+        }
         args.extend(extra);
         cases.push((args, message));
     }

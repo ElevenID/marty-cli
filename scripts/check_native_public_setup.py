@@ -43,6 +43,8 @@ def verify(prefix, version):
                 "did:web:issuer.example",
                 "--vct",
                 "https://issuer.example/employee",
+                "--claims",
+                '[{"name":"given_name","display":{"label":"Given name"}}]',
                 "-o",
                 "json",
             ],
@@ -57,6 +59,7 @@ def verify(prefix, version):
                 "credential_payload_format": "SD_JWT_VC",
                 "supported_formats": ["SD_JWT_VC"],
                 "privacy_posture": "selective_disclosure",
+                "claims": [{"name": "given_name", "display": {"label": "Given name"}}],
             },
         ),
         (
