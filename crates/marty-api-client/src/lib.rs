@@ -90,7 +90,7 @@ impl ApiError {
     #[must_use]
     pub fn is_retryable(&self) -> bool {
         match self {
-            Self::Network(_) => true,
+            Self::Network(error) => !error.is_builder(),
             Self::Response { status, body, .. } => {
                 RETRYABLE_STATUSES.contains(status)
                     || body
@@ -116,12 +116,16 @@ impl ApiClient {
     ///
     /// # Errors
     ///
-    /// Returns [`ApiError::InvalidUrl`] when `base_url` is not a valid URL.
+    /// Returns [`ApiError::InvalidUrl`] when `base_url` is not a valid URL, or
+    /// [`ApiError::Network`] when the HTTP transport cannot be initialized.
+    /// Native TLS uses the operating system's certificate store.
     pub fn new(base_url: &str, default_headers: HeaderMap) -> Result<Self, ApiError> {
         let base_url = Url::parse(&format!("{}/", base_url.trim_end_matches('/')))?;
         Ok(Self {
             base_url,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .build()
+                .map_err(ApiError::Network)?,
             default_headers,
             retry_policy: RetryPolicy::default(),
         })

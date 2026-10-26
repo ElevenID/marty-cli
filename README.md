@@ -15,7 +15,7 @@ The canonical implementation is the Rust workspace:
 
 GitHub releases contain native binaries for Linux, Windows, and macOS on x64
 and ARM64. Download the binary for your platform from the
-[v0.2.7 release](https://github.com/ElevenID/marty-cli/releases/tag/v0.2.7)
+[GitHub releases](https://github.com/ElevenID/marty-cli/releases)
 and verify it against the release's `SHA256SUMS` before running it. The
 `@elevenid/marty-cli` npm launcher is built and attached to that release, but
 is not currently published to npm. Its `bin/marty.js` adapter only locates and
@@ -33,6 +33,15 @@ not currently available.
 
 ## Quick start
 
+Native Linux GNU binaries require compatible glibc and an installed, readable OS
+CA certificate store. Minimal Ubuntu images need the `ca-certificates` package
+from their approved OS repository before HTTP commands can initialize the native
+transport, including when the configured API URL uses HTTP. Manage private CAs
+through the OS trust policy. Browser/WASM consumers use their host runtime's
+trust policy. Native v0.3.6 reports initialization failure as an error with a
+CA-store hint; earlier binaries can panic when the store is absent. TLS
+certificate verification remains enabled.
+
 ```bash
 # Native development build
 cargo build --package marty-cli
@@ -43,6 +52,30 @@ marty auth login --api-key <your-key>
 marty config set apiUrl http://localhost:8000
 marty orgs switch <org-id>
 ```
+
+## Local development checks
+
+Run development checks before pushing so routine failures are caught locally:
+
+```sh
+cargo fmt --all -- --check
+cargo test --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+python -m unittest discover -s scripts/tests
+npm test
+cargo clippy --package marty-api-client --target wasm32-unknown-unknown --locked -- -D warnings
+```
+
+After building a Linux x64 native binary, Docker can verify graceful failure
+without a CA store using the same probe as CI and the release producer:
+
+```sh
+python scripts/check_native_ca_prerequisite.py --binary path/to/marty --expected-version 0.3.6
+```
+
+For package changes, also pack and install the archives into a fresh consumer,
+then run the SDK HTTP/README and strict Node/browser type checks from the SDK
+guide. Protected CI and release checks remain required for the exact candidate.
 
 ## Commands
 
@@ -250,9 +283,9 @@ Every successful observation must identify the exact owned draft. Other lookup
 errors fail immediately; the production absence guard is unchanged.
 
 
-This source prepares v0.3.5 with corrected public organization/template setup
-commands. It retains the public SDK transport declarations introduced in v0.3.4,
-MIP 0.5.0 and the existing SDK runtime behavior. Use v0.3.5 only after its downloads
+This source prepares v0.3.6 with fallible native HTTP initialization and explicit
+Linux trust-store prerequisites. It retains the public setup commands from
+v0.3.5, SDK transport declarations from v0.3.4 and MIP 0.5.0. Use v0.3.6 only after its downloads
 and provenance are published and verified.
 See [the SDK guide](packages/api-core/README.md) for the typed contract and its
 response-validation limits.

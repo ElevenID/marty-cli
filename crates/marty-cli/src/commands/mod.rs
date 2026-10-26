@@ -709,7 +709,7 @@ fn headers(credentials: &Credentials) -> Result<HeaderMap> {
 
 fn client() -> Result<ApiClient> {
     let config = load_config()?;
-    ApiClient::new(&config.api_url, headers(&load_credentials()?)?).map_err(Into::into)
+    crate::transport::client(&config.api_url, headers(&load_credentials()?)?)
 }
 
 fn json_object(entries: impl IntoIterator<Item = (&'static str, Option<Value>)>) -> Value {
@@ -883,7 +883,9 @@ async fn login_oauth(client_id: &str, client_secret: &str, token_url: Option<&st
         },
         ToOwned::to_owned,
     );
-    let response = reqwest::Client::new()
+    let response = reqwest::Client::builder()
+        .build()
+        .context(crate::transport::INITIALIZATION_CONTEXT)?
         .post(&endpoint)
         .form(&[
             ("grant_type", "client_credentials"),

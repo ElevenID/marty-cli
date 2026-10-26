@@ -39,6 +39,12 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Run native behavioral suites
         run: cargo test --workspace --locked
+      - name: Verify graceful startup without a Linux CA store
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          version=$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          python scripts/check_native_ca_prerequisite.py --binary target/debug/marty --expected-version "$version"
       - name: Test release inventory and overwrite refusal controls
         run: python -m unittest discover -s scripts/tests
       - name: Exercise the native build dependency inventory

@@ -10,7 +10,6 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{TimeZone, Utc};
 use clap::{Args, Subcommand};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey, pkcs8::DecodePublicKey};
-use marty_api_client::ApiClient;
 use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
 
@@ -192,7 +191,7 @@ async fn validate_online(output: OutputFormat) -> Result<()> {
     if let Some(key) = creds.api_key {
         headers.insert("X-API-Key", key.parse()?);
     }
-    let result = ApiClient::new(&config.api_url, headers)?
+    let result = crate::transport::client(&config.api_url, headers)?
         .get(&format!("/v1/licenses/validate/{jti}"))
         .await?;
     print_value(

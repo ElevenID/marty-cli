@@ -8,6 +8,19 @@ use wiremock::{
     matchers::{body_json, header, method, path},
 };
 
+#[test]
+fn permanent_transport_builder_errors_are_not_retried() {
+    let error = reqwest::Client::builder()
+        .user_agent("\n")
+        .build()
+        .unwrap_err();
+    assert!(error.is_builder());
+    let error = ApiError::Network(error);
+    assert!(!error.is_retryable());
+    assert_eq!(error.status(), None);
+    assert_eq!(error.body(), None);
+}
+
 #[tokio::test]
 async fn sends_protocol_and_caller_headers_with_json_body() {
     let server = MockServer::start().await;
