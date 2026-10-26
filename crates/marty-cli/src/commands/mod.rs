@@ -118,8 +118,6 @@ enum OrgsCommand {
         name: String,
         #[arg(long)]
         display_name: Option<String>,
-        #[arg(long)]
-        owner_id: Option<String>,
         #[arg(long, default_value = "PRIVATE")]
         visibility: String,
         #[command(flatten)]
@@ -439,19 +437,19 @@ enum CredentialTemplatesCommand {
         #[arg(long)]
         compliance_profile_id: String,
         #[arg(long)]
-        trust_profile_id: String,
+        trust_profile_id: Option<String>,
         #[arg(long, default_value = "SD_JWT_VC")]
         format: String,
         #[arg(long)]
         vct: Option<String>,
         #[arg(long)]
-        claims: Option<String>,
-        #[arg(long, default_value = "key_vault")]
-        key_access_mode: String,
-        #[arg(long, default_value = "ES256")]
-        issuer_algorithm: String,
+        doctype: Option<String>,
         #[arg(long)]
-        issuer_did: Option<String>,
+        claims: String,
+        #[arg(long)]
+        issuer_did: String,
+        #[arg(long)]
+        issuance_protocol: Option<String>,
         #[arg(long, default_value = "selective_disclosure")]
         privacy_posture: String,
         #[command(flatten)]
@@ -459,10 +457,10 @@ enum CredentialTemplatesCommand {
         #[arg(long)]
         dry_run: bool,
     },
-    Publish {
+    /// Activate a draft template through the public lifecycle API.
+    #[command(alias = "publish")]
+    Activate {
         template_id: String,
-        #[arg(long)]
-        force: bool,
         #[command(flatten)]
         output: JsonOutputArgs,
         #[arg(long)]
@@ -962,7 +960,6 @@ async fn run_orgs(args: OrgsArgs, global: Option<OutputFormat>) -> Result<()> {
         OrgsCommand::Create {
             name,
             display_name,
-            owner_id,
             visibility,
             mut output,
             dry_run: is_dry,
@@ -974,7 +971,6 @@ async fn run_orgs(args: OrgsArgs, global: Option<OutputFormat>) -> Result<()> {
                     "display_name",
                     Some(json!(display_name.unwrap_or_else(|| name.clone()))),
                 ),
-                ("owner_id", owner_id.map(Value::String)),
                 ("visibility", Some(json!(visibility))),
             ]);
             if !dry_run(is_dry, "POST /v1/organizations", Some(&body))? {
@@ -1901,6 +1897,22 @@ async fn run_flows(args: FlowsArgs, global: Option<OutputFormat>) -> Result<()> 
     Ok(())
 }
 
+fn template_format(value: &str) -> Result<&'static str> {
+    match value.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+        "sd_jwt_vc" | "vc+sd_jwt" | "dc+sd_jwt" | "spruce_vc+sd_jwt" | "sd_jwt" | "ietf_sd_jwt"
+        | "w3c_vcdm_v2_sd_jwt" => Ok("SD_JWT_VC"),
+        "mdoc" | "mso_mdoc" => Ok("MDOC"),
+        "vc_jwt" | "jwt_vc" | "jwt_vc_json" | "jwt_vc_json_ld" | "w3c_vcdm_v2_jwt_vc" => {
+            Ok("VC_JWT")
+        }
+        "jsonld" | "json_ld" | "ldp_vc" => Ok("JSON_LD"),
+        "zk_mdoc" | "zkp_mdoc" => Ok("ZK_MDOC"),
+        "vds_nc" | "vds_nc_barcode" => Ok("VDS_NC"),
+        "icao_emrtd" => Ok("ICAO_EMRTD"),
+        _ => bail!("Unsupported template --format: {value}"),
+    }
+}
+
 async fn run_credential_templates(
     args: CredentialTemplatesArgs,
     global: Option<OutputFormat>,
@@ -1963,34 +1975,45 @@ async fn run_credential_templates(
             trust_profile_id,
             format,
             vct,
+            doctype,
             claims,
-            key_access_mode,
-            issuer_algorithm,
             issuer_did,
+            issuance_protocol,
             privacy_posture,
             mut output,
             dry_run: is_dry,
         } => {
             apply_global(&mut output.output, global);
             let config = load_config()?;
+            let format = template_format(&format)?;
+            if !issuer_did.starts_with("did:") || issuer_did.len() > 2048 {
+                bail!("--issuer-did must be a public DID of at most 2048 bytes");
+            }
+            if format == "SD_JWT_VC" && vct.as_deref().is_none_or(str::is_empty) {
+                bail!("--vct is required for SD_JWT_VC templates");
+            }
+            if matches!(format, "MDOC" | "ZK_MDOC") && doctype.as_deref().is_none_or(str::is_empty)
+            {
+                bail!("--doctype is required for MDOC and ZK_MDOC templates");
+            }
+            let claims = parse_json(&claims, "--claims")?;
+            if claims.as_array().is_none_or(Vec::is_empty) {
+                bail!("--claims must be a nonempty JSON array");
+            }
             let body = json_object([
                 ("organization_id", Some(json!(require_org(&config)?))),
                 ("name", Some(json!(name))),
                 ("credential_type", Some(json!(credential_type))),
                 ("compliance_profile_id", Some(json!(compliance_profile_id))),
-                ("trust_profile_id", Some(json!(trust_profile_id))),
+                ("trust_profile_id", trust_profile_id.map(Value::String)),
                 ("credential_payload_format", Some(json!(format))),
-                ("key_access_mode", Some(json!(key_access_mode))),
-                ("issuer_algorithm", Some(json!(issuer_algorithm))),
+                ("supported_formats", Some(json!([format]))),
                 ("privacy_posture", Some(json!(privacy_posture))),
                 ("vct", vct.map(Value::String)),
-                ("issuer_did", issuer_did.map(Value::String)),
-                (
-                    "claims",
-                    claims
-                        .map(|value| parse_json(&value, "--claims"))
-                        .transpose()?,
-                ),
+                ("doctype", doctype.map(Value::String)),
+                ("issuer_did", Some(json!(issuer_did))),
+                ("issuance_protocol", issuance_protocol.map(Value::String)),
+                ("claims", Some(claims)),
             ]);
             if !dry_run(is_dry, "POST /v1/credential-templates", Some(&body))? {
                 print_value(
@@ -1999,23 +2022,18 @@ async fn run_credential_templates(
                 )?;
             }
         }
-        CredentialTemplatesCommand::Publish {
+        CredentialTemplatesCommand::Activate {
             template_id,
-            force,
             mut output,
             dry_run: is_dry,
         } => {
             apply_global(&mut output.output, global);
-            let display = format!("/v1/credential-templates/{template_id}/publish");
+            let display = format!("/v1/credential-templates/{template_id}/activate");
             if !dry_run(is_dry, &format!("POST {display}"), Some(&json!({})))? {
-                let query = if force { "force=true" } else { "" };
                 print_value(
                     &client()?
                         .post(
-                            &format!(
-                                "/v1/credential-templates/{}/publish?{query}",
-                                encode(&template_id)
-                            ),
+                            &format!("/v1/credential-templates/{}/activate", encode(&template_id)),
                             &json!({}),
                         )
                         .await?,

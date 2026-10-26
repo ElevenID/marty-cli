@@ -33,7 +33,7 @@
   },
   {
     "name": "create organization",
-    "args": ["orgs", "create", "--name", "Acme", "--owner-id", "owner-1", "--dry-run"],
+    "args": ["orgs", "create", "--name", "acme", "--display-name", "Acme", "--dry-run"],
     "stdout_contains": ["[dry-run] POST /v1/organizations", "\"display_name\": \"Acme\"", "\"visibility\": \"PRIVATE\""]
   },
   {
@@ -83,8 +83,8 @@
   {
     "name": "create credential template",
     "config": {"organizationId": "org-1"},
-    "args": ["ct", "create", "--name", "Badge", "--credential-type", "EmployeeCredential", "--compliance-profile-id", "cp-1", "--trust-profile-id", "tp-1", "--claims", "[{\"name\":\"given_name\"}]", "--dry-run"],
-    "stdout_contains": ["[dry-run] POST /v1/credential-templates", "\"credential_payload_format\": \"SD_JWT_VC\"", "\"issuer_algorithm\": \"ES256\""]
+    "args": ["ct", "create", "--name", "Badge", "--credential-type", "EmployeeCredential", "--compliance-profile-id", "cp-1", "--trust-profile-id", "tp-1", "--claims", "[{\"name\":\"given_name\",\"display\":{\"label\":\"Given name\"}}]", "--issuer-did", "did:web:issuer.example", "--vct", "https://issuer.example/employee", "--dry-run"],
+    "stdout_contains": ["[dry-run] POST /v1/credential-templates", "\"credential_payload_format\": \"SD_JWT_VC\"", "\"supported_formats\": [", "\"issuer_did\": \"did:web:issuer.example\""]
   },
   {
     "name": "create compliance profile",
