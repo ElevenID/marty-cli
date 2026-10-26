@@ -15,14 +15,8 @@ mod browser;
 
 pub const MIP_VERSION: &str = "0.5.0";
 
-const RETRYABLE_STATUSES: [StatusCode; 6] = [
-    StatusCode::REQUEST_TIMEOUT,
-    StatusCode::TOO_MANY_REQUESTS,
-    StatusCode::INTERNAL_SERVER_ERROR,
-    StatusCode::BAD_GATEWAY,
-    StatusCode::SERVICE_UNAVAILABLE,
-    StatusCode::GATEWAY_TIMEOUT,
-];
+mod retry;
+use retry::{DelayCap, RETRYABLE_STATUSES, backoff_delay_ms};
 
 #[derive(Debug, Clone)]
 pub struct RetryPolicy {
@@ -92,7 +86,7 @@ impl ApiError {
         match self {
             Self::Network(error) => !error.is_builder(),
             Self::Response { status, body, .. } => {
-                RETRYABLE_STATUSES.contains(status)
+                RETRYABLE_STATUSES.contains(&status.as_u16())
                     || body
                         .pointer("/error/recovery_action")
                         .and_then(Value::as_str)
@@ -261,13 +255,15 @@ impl ApiClient {
                 }
             }
 
-            let multiplier = self
-                .retry_policy
-                .backoff_multiplier
-                .powi(attempt.cast_signed());
-            let jitter = rand::random_range(0.75..=1.25);
-            let delay = self.retry_policy.base_delay.mul_f64(multiplier * jitter);
-            sleep(delay.min(self.retry_policy.max_delay)).await;
+            let delay_ms = backoff_delay_ms(
+                self.retry_policy.base_delay.as_secs_f64() * 1000.0,
+                self.retry_policy.max_delay.as_secs_f64() * 1000.0,
+                self.retry_policy.backoff_multiplier,
+                attempt,
+                rand::random_range(-1.0..=1.0),
+                DelayCap::AfterJitter,
+            );
+            sleep(Duration::from_secs_f64(delay_ms / 1000.0)).await;
             attempt += 1;
         }
     }

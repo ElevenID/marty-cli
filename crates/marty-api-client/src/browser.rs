@@ -4,9 +4,8 @@ use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Headers, Response, UrlSearchParams};
 
-use crate::MIP_VERSION;
-
-const RETRYABLE_STATUSES: [u16; 6] = [408, 429, 500, 502, 503, 504];
+use crate::retry::{DelayCap, RETRYABLE_STATUSES, backoff_delay_ms};
+use crate::{MIP_VERSION, RetryPolicy};
 
 #[derive(Debug, Clone)]
 struct BrowserRetryPolicy {
@@ -20,11 +19,12 @@ struct BrowserRetryPolicy {
 
 impl Default for BrowserRetryPolicy {
     fn default() -> Self {
+        let common = RetryPolicy::default();
         Self {
-            max_retries: 3,
-            base_delay_ms: 1_000.0,
-            max_delay_ms: 10_000.0,
-            backoff_multiplier: 2.0,
+            max_retries: common.max_retries,
+            base_delay_ms: common.base_delay.as_secs_f64() * 1000.0,
+            max_delay_ms: common.max_delay.as_secs_f64() * 1000.0,
+            backoff_multiplier: common.backoff_multiplier,
             retryable_statuses: RETRYABLE_STATUSES.to_vec(),
             retryable_errors: vec!["TypeError".to_owned(), "NetworkError".to_owned()],
         }
@@ -49,10 +49,17 @@ impl BrowserRetryPolicy {
     }
 
     fn delay(&self, attempt: u32) -> u32 {
-        let exponential = self.base_delay_ms * self.backoff_multiplier.powi(attempt.cast_signed());
-        let capped = exponential.min(self.max_delay_ms);
-        let jitter = capped * 0.25 * (js_sys::Math::random() * 2.0 - 1.0);
-        nonnegative_u32((capped + jitter).round())
+        nonnegative_u32(
+            backoff_delay_ms(
+                self.base_delay_ms,
+                self.max_delay_ms,
+                self.backoff_multiplier,
+                attempt,
+                js_sys::Math::random() * 2.0 - 1.0,
+                DelayCap::BeforeJitter,
+            )
+            .round(),
+        )
     }
 }
 
