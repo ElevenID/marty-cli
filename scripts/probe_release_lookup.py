@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -24,7 +25,7 @@ from check_release_absent import (
 )
 
 
-def exercise(repository, tag, commit, tag_ref, token, output, *, opener=urlopen):
+def exercise(repository, tag, commit, tag_ref, token, output, *, opener=urlopen, sleeper=time.sleep):
     actions_write_context(repository)
     if os.environ.get("GITHUB_JOB") != "release-lookup-probe":
         raise ValueError("Draft fixture is restricted to the manual preflight job")
@@ -39,7 +40,8 @@ def exercise(repository, tag, commit, tag_ref, token, output, *, opener=urlopen)
               "draft_target_commitish": "main",
               "source_sha": os.environ.get("GITHUB_SHA"), "fixture_id": None,
               "owner_nonce": marker,
-              "draft_refused": False, "owned_draft_removed": False, "tag_unchanged": False}
+              "draft_refused": False, "owned_draft_removed": False, "tag_unchanged": False,
+              "stage": "initial", "lookup_observations": []}
     failure = None
 
     def save(*, initial=False):
@@ -74,7 +76,9 @@ def exercise(repository, tag, commit, tag_ref, token, output, *, opener=urlopen)
     record["result"] = "running"
     save(initial=True)
     try:
+        record["stage"] = "initial_absence"
         ensure_release_absent(repository, tag, token, opener=opener, actions_write_token=True)
+        record["stage"] = "create_owned_draft"
         created = api("POST", "/releases", {
             # The existing tag is authoritative; target_commitish is ignored
             # for it. Keep the default branch selector so no workflow scope
@@ -87,9 +91,26 @@ def exercise(repository, tag, commit, tag_ref, token, output, *, opener=urlopen)
             raise ValueError("Fixture creation did not return an owned release identity")
         record["fixture_id"] = identity
         save()
-        observed = load_release(repository, tag, token, opener=opener, actions_write_token=True)
+        record["created_tag"] = created.get("tag_name")
+        record["created_draft"] = created.get("draft")
+        record["stage"] = "observe_owned_draft"
+        # Only an absent lookup is retried, with a fixed 18-second wait bound.
+        # This does not relax the production guard or accept another draft.
+        for attempt in range(10):
+            observed = load_release(repository, tag, token, opener=opener, actions_write_token=True)
+            record["lookup_observations"].append(
+                None if observed is None else {
+                    "id": observed.get("id"), "tag_name": observed.get("tag_name"),
+                    "draft": observed.get("draft"),
+                })
+            save()
+            if observed is not None:
+                break
+            if attempt < 9:
+                sleeper(2)
         if not isinstance(observed, dict) or observed.get("id") != identity or observed.get("draft") is not True:
             raise ValueError("Actions lookup did not identify the exact owned draft")
+        record["stage"] = "refuse_owned_draft"
         try:
             ensure_release_absent(repository, tag, token, opener=opener, actions_write_token=True)
         except ReleaseAlreadyExistsError:
@@ -98,6 +119,8 @@ def exercise(repository, tag, commit, tag_ref, token, output, *, opener=urlopen)
             raise ValueError("Actions lookup failed to see its owned draft")
     except Exception as error:  # noqa: BLE001 - Unexpected probe failures must still clean owned state.
         failure = error
+        record["failure_stage"] = record["stage"]
+        record["failure_type"] = type(error).__name__
     finally:
         try:
             if record["fixture_id"] is not None:
@@ -117,7 +140,11 @@ def exercise(repository, tag, commit, tag_ref, token, output, *, opener=urlopen)
                 raise ValueError("Existing fixture tag changed during preflight")
         except Exception as error:  # noqa: BLE001 - Preserve failed ownership/cleanup as unqualified evidence.
             failure = error
+            record["cleanup_failure_type"] = type(error).__name__
         finally:
+            if failure is not None and "failure_stage" not in record:
+                record["failure_stage"] = "cleanup"
+                record["failure_type"] = type(failure).__name__
             record["result"] = "passed" if failure is None else "failed"
             save()
     if failure is not None:

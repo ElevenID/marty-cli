@@ -240,3 +240,10 @@ The release jobs use explicit Actions write-token mode in their trusted workflow
 context. User-role `permissions.push` is not an installation-token scope check;
 standalone lookup keeps its user-role visibility check. The real Actions preflight
 must pass before the next version is tagged.
+
+Preflight run 40324132380 created and removed its fixture but did not confirm
+lookup visibility. The tag remained unchanged; v0.3.3 is still untagged. The
+probe now records lookup identities and the failure stage, allowing up to ten
+observations with at most 18 seconds of waiting when lookup reports absence.
+Every successful observation must identify the exact owned draft. Other lookup
+errors fail immediately; the production absence guard is unchanged.
