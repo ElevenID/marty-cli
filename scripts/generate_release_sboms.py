@@ -28,7 +28,7 @@ TARGETS = {
 
 
 def run(arguments: list[str]) -> str:
-    result = subprocess.run(arguments, cwd=ROOT, capture_output=True, text=True,
+    result = subprocess.run(arguments, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
                             check=False, timeout=180)
     if result.returncode:
         raise RuntimeError(f"SBOM command failed: {Path(arguments[0]).name}")

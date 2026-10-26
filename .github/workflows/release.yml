@@ -186,6 +186,7 @@ jobs:
           test "$("$RUNNER_TEMP/marty-cli-release-smoke/node_modules/.bin/marty" --version)" = "${GITHUB_REF_NAME#v}"
           "$RUNNER_TEMP/marty-cli-release-smoke/node_modules/.bin/marty" api-keys create --help
           node scripts/check-packed-api-client.mjs "$RUNNER_TEMP/marty-cli-release-smoke" "${GITHUB_REF_NAME#v}"
+          node scripts/check-packed-api-types.mjs "dist/elevenid-marty-api-core-${GITHUB_REF_NAME#v}.tgz"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: marty-cli-release
