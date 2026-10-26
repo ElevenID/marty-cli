@@ -10,18 +10,25 @@ Provides `createApiClient()` with:
 - Exponential-backoff retry for GET requests
 - Structured error parsing (MIP error envelope)
 - Request-ID generation
-- Marty Protocol 0.4 version negotiation on every request
+- Marty Protocol 0.5 version negotiation on every request
 - Helper utilities: `getErrorMessage`, `getErrorCode`, `isAuthError`, `isRetryableError`, `handleApiError`
 
 ## Usage
 
 The package is available as a release tarball, not through the npm registry.
-For a pinned consumer install, download and verify
-[`elevenid-marty-api-core-0.2.7.tgz`](https://github.com/ElevenID/marty-cli/releases/download/v0.2.7/elevenid-marty-api-core-0.2.7.tgz)
+For a pinned v0.3.0 consumer install, download and verify
+[`elevenid-marty-api-core-0.3.0.tgz`](https://github.com/ElevenID/marty-cli/releases/download/v0.3.0/elevenid-marty-api-core-0.3.0.tgz)
 against the release's
-[`SHA256SUMS`](https://github.com/ElevenID/marty-cli/releases/download/v0.2.7/SHA256SUMS),
-then install the local file with `npm install ./elevenid-marty-api-core-0.2.7.tgz`.
+[`SHA256SUMS`](https://github.com/ElevenID/marty-cli/releases/download/v0.3.0/SHA256SUMS),
+then install the local file with `npm install ./elevenid-marty-api-core-0.3.0.tgz`.
 The package name in imports remains `@elevenid/marty-api-core`.
+
+Version v0.3.0 retains the established HTTP and JavaScript factory
+behavior and MIP `0.5.0` header. The family version also covers the native CLI's
+new API-key commands; it is separate from the server API version. A version is
+installable only after its release artifacts and checksums are published. npm
+registry publishing is optional; GitHub release tarballs are the documented
+install channel.
 
 ```js
 import { MIP_VERSION, createApiClient, getErrorMessage } from '@elevenid/marty-api-core';
@@ -46,7 +53,7 @@ const orgs = await api.get('/v1/organizations');
 | Project | Auth Strategy | Install |
 |---------|--------------|---------|
 | `marty-ui` | Cookie (`credentials: 'include'`) | Verified GitHub release tarball above |
-| `marty-integration-tests` | Session cookie / Bearer | Verified GitHub release tarball above |
+| `marty-integration-tests` | Session cookie / organization API key | Verified GitHub release tarball above |
 
 ## Building from source
 

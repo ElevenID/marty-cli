@@ -36,6 +36,20 @@ fn all_platform_packages_match_the_native_release_version() {
     .expect("root package JSON");
     assert_eq!(root_manifest["version"], env!("CARGO_PKG_VERSION"));
     assert!(root_manifest.get("dependencies").is_none());
+    let api_manifest: Value = serde_json::from_slice(
+        &fs::read(root().join("packages/api-core/package.json")).expect("API package manifest"),
+    )
+    .expect("API package JSON");
+    assert_eq!(api_manifest["version"], env!("CARGO_PKG_VERSION"));
+    let lock: Value =
+        serde_json::from_slice(&fs::read(root().join("package-lock.json")).expect("npm lock"))
+            .expect("npm lock JSON");
+    assert_eq!(lock["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(lock["packages"][""]["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        lock["packages"]["packages/api-core"]["version"],
+        env!("CARGO_PKG_VERSION")
+    );
 
     let targets = [
         ("darwin-arm64", "darwin", "arm64"),
@@ -56,6 +70,10 @@ fn all_platform_packages_match_the_native_release_version() {
         assert_eq!(manifest["cpu"][0], cpu);
         assert_eq!(
             root_manifest["optionalDependencies"][format!("@elevenid/marty-cli-{target}")],
+            env!("CARGO_PKG_VERSION")
+        );
+        assert_eq!(
+            lock["packages"][""]["optionalDependencies"][format!("@elevenid/marty-cli-{target}")],
             env!("CARGO_PKG_VERSION")
         );
     }

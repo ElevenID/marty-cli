@@ -111,3 +111,15 @@ jobs:
           PY
       - name: Run browser API behavioral compatibility tests
         run: npm test
+      - name: Verify a fresh install of the packed API client
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./packages/api-core/package.json').version")"
+          mkdir "$RUNNER_TEMP/marty-sdk-pack"
+          cp LICENSE packages/api-core/LICENSE
+          npm pack --workspace @elevenid/marty-api-core --pack-destination "$RUNNER_TEMP/marty-sdk-pack"
+          npm install --ignore-scripts --no-audit --no-fund \
+            --prefix "$RUNNER_TEMP/marty-sdk-install" \
+            "$RUNNER_TEMP/marty-sdk-pack/elevenid-marty-api-core-$version.tgz"
+          node scripts/check-packed-api-client.mjs "$RUNNER_TEMP/marty-sdk-install" "$version"
