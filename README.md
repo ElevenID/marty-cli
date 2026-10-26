@@ -81,13 +81,12 @@ and integration-test session cookies remain supported in the native client.
 
 ## Output and dry runs
 
-### API-key lifecycle (v0.3.1)
+### API-key lifecycle (v0.3.2)
 
-The first published release planned for these commands is v0.3.1; the earlier
-v0.2.7 binaries do not include them. The v0.3.0 tag is retained as a failed
-release attempt: its archive license check failed before any assets were
-published. Use v0.3.1 only after its release workflow has published and
-attested the downloads. They call the
+These commands are available in v0.3.1 and later; v0.2.7 does not include them.
+The v0.3.0 tag remains a failed release attempt. v0.3.2 corrects the SDK SBOM
+identity and adds Rust inventories for each native target and browser WASM;
+use its downloads only after that release is published and attested. They call the
 existing public gateway API and require an already provisioned operator
 credential. An organization-bound `admin:full` key may manage keys within its
 own organization; ordinary credential scopes cannot manage keys. Initial
@@ -194,3 +193,36 @@ The native test suite covers the public command vectors, authenticated HTTP
 workflows, configuration and credential persistence, structured MIP errors,
 GET-only retries, browser/WASM compatibility, all supported license tiers, and
 fail-closed invalid inputs.
+
+## Release inventories
+
+Starting with v0.3.2, the release publishes these CycloneDX inventories alongside
+its packages and binaries. SHA256SUMS and the release attestation cover each file.
+The npm registry remains an optional channel; these files accompany the GitHub
+release downloads.
+
+| Inventory | Scope |
+| --- | --- |
+| `marty-cli-sbom.cdx.json` | npm launcher and its six optional platform packages |
+| `marty-api-core-sbom.cdx.json` | npm browser SDK, linked to its WASM Rust inventory |
+| `marty-cli-<platform>-npm-sbom.cdx.json` | One native npm package, linked to its Rust inventory |
+| `marty-cli-<platform>-rust-sbom.cdx.json` | Resolved production Rust graph for that native target |
+| `marty-api-client-wasm-rust-sbom.cdx.json` | Resolved production Rust graph for `wasm32-unknown-unknown` |
+
+The producer uses pinned [cargo-cyclonedx 0.5.9](https://github.com/CycloneDX/cyclonedx-rust-cargo/blob/cargo-cyclonedx-0.5.9/cargo-cyclonedx/README.md).
+Each native build runner generates its Rust inventory alongside its binary; the
+WASM packaging runner generates the browser inventory. The producer checks the
+component metadata and registry checksums against Cargo metadata and the unchanged
+lockfile, then uses each package's normal/build Cargo tree for the production
+components and edges. This excludes development/workspace feature extras. The
+recorded build host also binds the build-dependency context. The npm roots must identify their actual package and
+version. OS libraries, remote services and KMS deployments have separate inventories.
+
+v0.3.1's SDK SBOM incorrectly identifies the CLI root and omits the SDK component;
+its checksum and provenance verify those published bytes but do not correct that
+inventory. Those assets and tags remain unchanged. The normal release workflow
+serializes each tag and refuses existing draft or published releases before builds
+and immediately before attestation/publication. Draft lookup requires verified
+push visibility and a complete paginated release listing. Publication uses a
+create-only command, with no update or asset-overwrite path. Corrections use a
+new version.

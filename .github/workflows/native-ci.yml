@@ -18,6 +18,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
@@ -27,6 +30,7 @@ jobs:
         run: |
           rustup toolchain install 1.93.0 --profile minimal --component clippy,rustfmt
           rustup default 1.93.0
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
       - name: Install browser-package dependencies
         run: npm ci
       - name: Check formatting
@@ -35,6 +39,10 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Run native behavioral suites
         run: cargo test --workspace --locked
+      - name: Test release inventory and overwrite refusal controls
+        run: python -m unittest discover -s scripts/tests
+      - name: Exercise the native build dependency inventory
+        run: python scripts/generate_release_sboms.py --host-native --rust-only --output artifacts/native-sbom-smoke
       - name: Run the browser API compatibility suite
         run: npm test
 
@@ -54,6 +62,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
@@ -64,7 +75,10 @@ jobs:
           rustup toolchain install 1.93.0 --profile minimal --component clippy --target wasm32-unknown-unknown
           rustup default 1.93.0
           cargo install wasm-bindgen-cli --version 0.2.127 --locked
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
       - run: npm ci
+      - name: Exercise real package and Rust inventory generation
+        run: python scripts/generate_release_sboms.py --targets wasm --output artifacts/source-sbom-smoke
       - name: Lint the browser target
         run: cargo clippy --package marty-api-client --target wasm32-unknown-unknown -- -D warnings
       - name: Rebuild the Rust/WASM package

@@ -4,23 +4,38 @@ on:
   push:
     tags: ["v*"]
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   verify-source:
     runs-on: ubuntu-latest
+    # GitHub only exposes drafts to identities with push visibility. This
+    # trusted tag-only job uses the token for the read-only absence check.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
       - name: Require source integrated into main
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Refuse an existing draft or published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/check_release_absent.py --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
 
   build-native:
     needs: verify-source
@@ -55,11 +70,15 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
       - name: Install the pinned Rust toolchain
         shell: bash
         run: |
           rustup toolchain install 1.93.0 --profile minimal --target '${{ matrix.target }}'
           rustup default 1.93.0
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
       - name: Build native CLI
         run: cargo build --package marty-cli --release --locked --target ${{ matrix.target }}
       - name: Verify the actual native release entry point
@@ -69,10 +88,15 @@ jobs:
           binary="target/${{ matrix.target }}/release/${{ matrix.executable }}"
           test "$("$binary" --version)" = "${GITHUB_REF_NAME#v}"
           "$binary" api-keys create --help
+      - name: Inventory the actual native build on its build host
+        shell: bash
+        run: |
+          python scripts/generate_release_sboms.py --rust-only --targets '${{ matrix.artifact }}' --output native-dist
+          cp 'target/${{ matrix.target }}/release/${{ matrix.executable }}' 'native-dist/${{ matrix.executable }}'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-${{ matrix.artifact }}
-          path: target/${{ matrix.target }}/release/${{ matrix.executable }}
+          path: native-dist/*
           if-no-files-found: error
           retention-days: 7
 
@@ -81,6 +105,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
@@ -92,6 +119,7 @@ jobs:
           rustup toolchain install 1.93.0 --profile minimal --target wasm32-unknown-unknown
           rustup default 1.93.0
           cargo install wasm-bindgen-cli --version 0.2.127 --locked
+          cargo install cargo-cyclonedx --version 0.5.9 --locked
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: native-*
@@ -121,6 +149,9 @@ jobs:
             cp "native/native-$target/marty.exe" "packages/cli-$target/bin/marty.exe"
             cp "native/native-$target/marty.exe" "dist/marty-$target.exe"
           done
+          for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+            cp "native/native-$target/marty-cli-$target-rust-sbom.cdx.json" dist/
+          done
       - run: npm ci
       - run: npm run build:wasm
       - run: npm test
@@ -132,8 +163,7 @@ jobs:
           for package_dir in packages/api-core packages/cli-*; do
             cp LICENSE "$package_dir/LICENSE"
           done
-          npm sbom --sbom-format cyclonedx > dist/marty-cli-sbom.cdx.json
-          npm sbom --workspace @elevenid/marty-api-core --sbom-format cyclonedx > dist/marty-api-core-sbom.cdx.json
+          python scripts/generate_release_sboms.py --targets wasm --require-all --output dist
           npm pack --workspace @elevenid/marty-api-core --pack-destination dist
           for package_dir in packages/cli-*; do
             npm pack "./$package_dir" --pack-destination dist
@@ -197,14 +227,24 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: marty-cli-release
           path: dist
+      - name: Recheck release absence immediately before attestation and publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/check_release_absent.py --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          files: dist/*
-          generate_release_notes: true
+      - name: Create a new release without an update or overwrite path
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --target "$GITHUB_SHA" --generate-notes dist/*
