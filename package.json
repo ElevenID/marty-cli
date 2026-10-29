@@ -46,8 +46,8 @@
     "@elevenid/marty-cli-win32-x64": "0.3.6"
   },
   "devDependencies": {
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.5",
     "typescript": "7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.5"
   }
 }
