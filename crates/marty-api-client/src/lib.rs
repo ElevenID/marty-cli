@@ -51,13 +51,20 @@ pub enum ApiError {
     InvalidUrl(#[from] url::ParseError),
     #[error("failed to encode request body: {0}")]
     Encode(#[from] serde_json::Error),
+    /// A nonempty successful HTTP response did not contain valid JSON.
+    #[error("Marty API returned invalid JSON (HTTP {status}): {source}")]
+    Decode {
+        status: StatusCode,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 impl ApiError {
     #[must_use]
     pub fn status(&self) -> Option<StatusCode> {
         match self {
-            Self::Response { status, .. } => Some(*status),
+            Self::Response { status, .. } | Self::Decode { status, .. } => Some(*status),
             _ => None,
         }
     }
@@ -92,7 +99,7 @@ impl ApiError {
                         .and_then(Value::as_str)
                         == Some("retry")
             }
-            Self::InvalidUrl(_) | Self::Encode(_) => false,
+            Self::InvalidUrl(_) | Self::Encode(_) | Self::Decode { .. } => false,
         }
     }
 }
@@ -135,7 +142,7 @@ impl ApiClient {
     ///
     /// # Errors
     ///
-    /// Returns an [`ApiError`] for transport, URL, or non-success response failures.
+    /// Returns an [`ApiError`] for transport, URL, HTTP status, or JSON decoding failures.
     pub async fn get(&self, endpoint: &str) -> Result<Value, ApiError> {
         self.request(Method::GET, endpoint, Option::<&Value>::None)
             .await
@@ -184,7 +191,7 @@ impl ApiClient {
     ///
     /// # Errors
     ///
-    /// Returns an [`ApiError`] for transport, URL, or non-success response failures.
+    /// Returns an [`ApiError`] for transport, URL, HTTP status, or JSON decoding failures.
     pub async fn delete(&self, endpoint: &str) -> Result<Value, ApiError> {
         self.request(Method::DELETE, endpoint, Option::<&Value>::None)
             .await
@@ -229,7 +236,15 @@ impl ApiClient {
                     let value = if bytes.is_empty() {
                         Value::Null
                     } else {
-                        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+                        match serde_json::from_slice(&bytes) {
+                            Ok(value) => value,
+                            Err(source) if status.is_success() => {
+                                return Err(ApiError::Decode { status, source });
+                            }
+                            // A non-JSON error page must retain its HTTP status
+                            // and retry policy, rather than becoming a decode error.
+                            Err(_) => Value::Null,
+                        }
                     };
 
                     if status.is_success() {
