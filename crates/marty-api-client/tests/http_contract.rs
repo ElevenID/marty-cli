@@ -118,3 +118,91 @@ async fn retries_get_but_never_retries_post() {
     assert!(client.get("/retry").await.is_err());
     assert!(client.post("/retry", &json!({})).await.is_err());
 }
+
+#[tokio::test]
+async fn malformed_success_bodies_are_decode_errors_without_retries() {
+    let server = MockServer::start().await;
+    let client = ApiClient::new(&server.uri(), HeaderMap::new()).expect("client");
+
+    for (index, body) in [
+        b"{\"incomplete\":".as_slice(),
+        b"<html>Unexpected proxy response</html>".as_slice(),
+        b"   ".as_slice(),
+        &[0xff],
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        for verb in ["GET", "POST"] {
+            let endpoint = format!("/malformed/{index}/{verb}");
+            Mock::given(method(verb))
+                .and(path(&endpoint))
+                .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let error = if verb == "GET" {
+                client.get(&endpoint).await
+            } else {
+                client.post(&endpoint, &json!({})).await
+            }
+            .expect_err("malformed response must not become a successful null result");
+
+            assert_eq!(error.status(), Some(reqwest::StatusCode::OK));
+            assert!(error.body().is_none());
+            assert!(!error.is_retryable());
+            assert!(matches!(error, ApiError::Decode { .. }));
+        }
+    }
+}
+
+#[tokio::test]
+async fn empty_success_and_json_null_responses_remain_supported() {
+    let server = MockServer::start().await;
+    let client = ApiClient::new(&server.uri(), HeaderMap::new()).expect("client");
+
+    for (endpoint, response) in [
+        ("/empty", ResponseTemplate::new(200)),
+        ("/no-content", ResponseTemplate::new(204)),
+        (
+            "/json-null",
+            ResponseTemplate::new(200).set_body_json(serde_json::Value::Null),
+        ),
+    ] {
+        Mock::given(method("GET"))
+            .and(path(endpoint))
+            .respond_with(response)
+            .expect(1)
+            .mount(&server)
+            .await;
+        assert_eq!(client.get(endpoint).await.unwrap(), serde_json::Value::Null);
+    }
+}
+
+#[tokio::test]
+async fn non_json_error_pages_preserve_status_and_retry_policy() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/proxy-error"))
+        .respond_with(
+            ResponseTemplate::new(502).set_body_raw("<html>Proxy failure</html>", "text/html"),
+        )
+        .expect(2)
+        .mount(&server)
+        .await;
+    let client = ApiClient::new(&server.uri(), HeaderMap::new())
+        .expect("client")
+        .with_retry_policy(RetryPolicy {
+            max_retries: 1,
+            base_delay: Duration::ZERO,
+            max_delay: Duration::ZERO,
+            ..RetryPolicy::default()
+        });
+
+    let error = client.get("/proxy-error").await.unwrap_err();
+    assert_eq!(error.status(), Some(reqwest::StatusCode::BAD_GATEWAY));
+    assert_eq!(error.body(), Some(&serde_json::Value::Null));
+    assert!(error.is_retryable());
+    assert!(matches!(error, ApiError::Response { .. }));
+}
