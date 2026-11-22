@@ -17,6 +17,8 @@ def module(name):
     return value
 
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
+
 sboms = module("generate_release_sboms")
 releases = module("check_release_absent")
 
